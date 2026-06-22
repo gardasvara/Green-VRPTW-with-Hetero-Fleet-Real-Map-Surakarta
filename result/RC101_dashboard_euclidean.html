@@ -1,0 +1,3172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RC101 — Green-VRPTW Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet-polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.min.js"></script>
+<script src="https://unpkg.com/leaflet-ant-path/dist/leaflet-ant-path.min.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<style>
+/* ── Reset & Base ───────────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a; --bg2:#111827; --bg3:#1e293b; --bg4:rgba(255,255,255,.04);
+  --border:rgba(255,255,255,.08); --border2:rgba(255,255,255,.12);
+  --text:#e2e8f0; --muted:#64748b; --accent:#6366f1;
+  --green:#22c55e; --amber:#f59e0b; --red:#ef4444;
+  --sidebar:360px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.app{display:flex;width:100vw;height:100vh;overflow:hidden}
+.sidebar{
+  width:var(--sidebar);min-width:var(--sidebar);max-width:var(--sidebar);
+  background:var(--bg2);display:flex;flex-direction:column;
+  border-right:1px solid var(--border);z-index:900;overflow:hidden;
+}
+#map{flex:1;height:100%;position:relative}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.header{
+  padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:linear-gradient(135deg,var(--bg2) 0%,rgba(99,102,241,.08) 100%);
+}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.instance-badge{
+  font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.5px;
+  background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;background-clip:text;
+}
+.status-pill{
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;letter-spacing:.5px;
+  background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;
+}
+.run-info{color:var(--muted);font-size:12px;margin-bottom:12px}
+
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.kpi{
+  background:var(--bg4);border:1px solid var(--border);border-radius:14px;
+  padding:10px 12px;transition:transform .15s;
+}
+.kpi:hover{transform:translateY(-1px);border-color:var(--border2)}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px}
+.kpi-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:3px}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────────── */
+.toolbar{
+  padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;flex-wrap:wrap;gap:5px;
+}
+.tbtn{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--bg4);border:1px solid var(--border);color:var(--text);
+  border-radius:10px;padding:6px 11px;font-size:11px;font-weight:600;cursor:pointer;
+  transition:background .15s,border-color .15s;white-space:nowrap;
+}
+.tbtn:hover,.tbtn.active{background:rgba(99,102,241,.2);border-color:rgba(99,102,241,.5);color:#a5b4fc}
+.tbtn i{font-size:10px}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────────── */
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{
+  flex:1;padding:11px 6px;font-size:12px;font-weight:600;text-align:center;
+  color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;
+  transition:color .15s,border-color .15s;
+}
+.tab.active{color:#fff;border-bottom-color:#6366f1}
+.tab-panels{flex:1;overflow:hidden;position:relative}
+.tab-panel{
+  position:absolute;inset:0;overflow-y:auto;padding:12px;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.tab-panel.active{opacity:1;pointer-events:auto}
+
+/* ── Route cards ─────────────────────────────────────────────────────────────── */
+.rcard{
+  background:var(--bg4);border:1px solid var(--border);border-radius:16px;
+  padding:12px;margin-bottom:8px;cursor:pointer;
+  transition:transform .15s,border-color .15s,background .15s;
+}
+.rcard:hover{transform:translateY(-1px);border-color:var(--border2);background:rgba(255,255,255,.06)}
+.rcard.active{border-color:#6366f1;background:rgba(99,102,241,.1)}
+.rcard-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.rbadge{
+  padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;color:#fff;margin-right:2px;
+}
+.rcard-title{font-size:13px;font-weight:700;line-height:1.2}
+.rcard-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.rcard-emit{font-size:13px;font-weight:700;color:#a78bfa}
+.cap-bar-wrap{height:4px;background:rgba(255,255,255,.1);border-radius:999px;margin-bottom:8px;overflow:hidden}
+.cap-bar{height:100%;border-radius:999px;transition:width .4s}
+.rcard-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:10px}
+.rcard-stats div{background:rgba(255,255,255,.04);border-radius:8px;padding:5px;text-align:center}
+.rcard-stats span{display:block;color:var(--muted);margin-bottom:2px}
+.rcard-stats b{font-weight:700;font-size:11px}
+
+/* ── Customer table ──────────────────────────────────────────────────────────── */
+.search-box{
+  width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:12px;
+  color:var(--text);padding:9px 12px;font-size:12px;outline:none;margin-bottom:10px;
+  font-family:'DM Sans',sans-serif;
+}
+.search-box::placeholder{color:var(--muted)}
+.search-box:focus{border-color:var(--border2)}
+.ctable-wrap{border:1px solid var(--border);border-radius:14px;overflow:auto;max-height:calc(100vh - 340px)}
+.ctable{width:100%;border-collapse:collapse;font-size:11px}
+.ctable thead th{
+  position:sticky;top:0;background:var(--bg3);color:var(--muted);
+  font-size:10px;text-transform:uppercase;letter-spacing:.6px;
+  padding:9px 8px;border-bottom:1px solid var(--border);font-weight:600;text-align:left;
+}
+.ctable tbody td{padding:7px 8px;border-bottom:1px solid var(--border)}
+.crow{cursor:pointer;transition:background .1s}
+.crow:hover{background:rgba(99,102,241,.1)}
+.ctag{
+  background:rgba(99,102,241,.15);color:#a5b4fc;border-radius:6px;
+  padding:2px 7px;font-weight:700;font-size:10px;
+}
+
+/* ── Vehicle cards ───────────────────────────────────────────────────────────── */
+.vcard{
+  background:var(--bg4);border:1px solid var(--border);border-radius:16px;
+  padding:14px;margin-bottom:10px;
+}
+.vcard-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.vcard-icon{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.vcard-title{font-size:14px;font-weight:700}
+.vcard-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.vcard-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.vcard-grid div{background:rgba(255,255,255,.04);border-radius:10px;padding:8px}
+.vcard-grid span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.vcard-grid b{font-size:14px;font-weight:700}
+.btn-filter{
+  width:100%;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);
+  color:#a5b4fc;border-radius:10px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .15s;
+}
+.btn-filter:hover{background:rgba(99,102,241,.25)}
+
+/* ── Timeline (Gantt) ────────────────────────────────────────────────────────── */
+.timeline-wrap{background:var(--bg4);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px}
+.tl-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.tl-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.tl-label{font-size:10px;font-weight:700;width:32px;flex-shrink:0;display:flex;align-items:center;gap:4px}
+.tl-dot{width:8px;height:8px;border-radius:999px;flex-shrink:0}
+.tl-bar-wrap{flex:1;height:12px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden;display:flex}
+.tl-spacer{height:100%;background:transparent}
+.tl-seg{height:100%}
+.tl-seg.drive{background:#3b82f6;opacity:.85}
+.tl-seg.svc{background:#22c55e;opacity:.85}
+.tl-seg.wait{background:#f59e0b;opacity:.85}
+.tl-info{font-size:9px;color:var(--muted);width:55px;text-align:right;flex-shrink:0}
+.tl-legend{display:flex;gap:12px;margin-top:8px}
+.tl-legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.tl-legend-dot{width:10px;height:10px;border-radius:3px}
+
+/* ── Charts area ─────────────────────────────────────────────────────────────── */
+.chart-wrap{background:var(--bg4);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px}
+.chart-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.chart-canvas-wrap{position:relative;height:160px}
+
+/* ── Detail panel (floating) ─────────────────────────────────────────────────── */
+.detail-panel{
+  position:absolute;bottom:16px;left:16px;z-index:1100;
+  background:rgba(17,24,39,.95);backdrop-filter:blur(12px);
+  border:1px solid var(--border2);border-radius:18px;
+  padding:14px;width:290px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  display:none;
+}
+.detail-panel.visible{display:block}
+.detail-panel-head{display:flex;justify-content:space-between;align-items:start;margin-bottom:10px}
+.detail-panel-title{font-size:14px;font-weight:800}
+.detail-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.detail-cell{background:rgba(255,255,255,.05);border-radius:10px;padding:7px 8px}
+.detail-cell span{display:block;font-size:9px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin-bottom:2px}
+.detail-cell b{font-size:13px;font-weight:700}
+.detail-seq{font-size:10px;color:#93c5fd;line-height:1.5;background:rgba(59,130,246,.08);border-radius:10px;padding:8px;word-break:break-word}
+
+/* ── Map overlay controls ─────────────────────────────────────────────────────── */
+.map-controls{
+  position:absolute;top:12px;right:12px;z-index:1000;
+  display:flex;flex-direction:column;gap:6px;
+}
+.map-btn{
+  background:rgba(17,24,39,.9);backdrop-filter:blur(8px);
+  border:1px solid var(--border2);color:var(--text);
+  border-radius:10px;padding:8px 12px;font-size:11px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;
+  transition:background .15s,border-color .15s;
+}
+.map-btn:hover,.map-btn.active{background:rgba(99,102,241,.3);border-color:rgba(99,102,241,.6)}
+
+/* ── Legend ──────────────────────────────────────────────────────────────────── */
+.legend{
+  position:absolute;bottom:16px;right:16px;z-index:1000;
+  background:rgba(17,24,39,.9);backdrop-filter:blur(8px);
+  border:1px solid var(--border);border-radius:14px;padding:12px;
+  min-width:160px;
+}
+.legend-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:5px}
+.legend-swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+
+/* ── Toast ───────────────────────────────────────────────────────────────────── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:rgba(17,24,39,.96);border:1px solid var(--border2);
+  border-radius:12px;padding:10px 18px;font-size:12px;font-weight:600;
+  color:var(--text);z-index:9999;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:999px}
+</style>
+</head>
+<body>
+
+<div class="app">
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════════ -->
+<aside class="sidebar">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="instance-badge">RC101</div>
+      <div class="status-pill">LAYAK ✓</div>
+    </div>
+    <div class="run-info">Run #3 · Seed 102 · Hybrid Genetic Search</div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Kendaraan (K)</div>
+        <div class="kpi-val" id="kpi-k">–</div>
+        <div class="kpi-sub">rute optimal</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Total Emisi</div>
+        <div class="kpi-val" id="kpi-emit">–</div>
+        <div class="kpi-sub">kgCO₂</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg Waiting</div>
+        <div class="kpi-val" id="kpi-wait">–</div>
+        <div class="kpi-sub">menit/rute</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">On-Time</div>
+        <div class="kpi-val" id="kpi-ot">–</div>
+        <div class="kpi-sub">pelayanan tepat waktu</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="tbtn active" id="btn-all" onclick="filterVehicle('all')">
+      <i class="fa-solid fa-layer-group"></i> Semua
+    </button>
+    <button class="tbtn" id="btn-motorcycle" onclick="filterVehicle('motorcycle')">
+      <i class="fa-solid fa-motorcycle"></i> Motor
+    </button>
+    <button class="tbtn" id="btn-van" onclick="filterVehicle('van')">
+      <i class="fa-solid fa-van-shuttle"></i> Van
+    </button>
+    <button class="tbtn" id="btn-truck" onclick="filterVehicle('truck')">
+      <i class="fa-solid fa-truck"></i> Truck
+    </button>
+    <button class="tbtn" id="btn-heat" onclick="toggleHeat()">
+      <i class="fa-solid fa-fire"></i> Heatmap
+    </button>
+    <button class="tbtn" id="btn-cluster" onclick="toggleCluster()">
+      <i class="fa-solid fa-circle-dot"></i> Cluster
+    </button>
+    <button class="tbtn" onclick="exportCSV()">
+      <i class="fa-solid fa-download"></i> Export CSV
+    </button>
+    <button class="tbtn" onclick="resetView()">
+      <i class="fa-solid fa-rotate"></i> Reset
+    </button>
+    <button class="tbtn" onclick="toggleAntPath()">
+      <i class="fa-solid fa-wind"></i> AntPath
+    </button>
+    <button class="tbtn" id="btn-sim" onclick="toggleSimulation()">
+      <i class="fa-solid fa-play"></i> Simulasi
+    </button>
+    
+    <select id="sim-speed" style="background:var(--bg4);border:1px solid var(--border);
+    color:var(--text);border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer">
+      <option value="2">2×</option>
+      <option value="4" selected>4×</option>
+      <option value="8">8×</option>
+      <option value="16">16×</option>
+      <option value="32">32×</option>
+    </select>
+    
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('routes')">Rute</div>
+    <div class="tab" onclick="switchTab('customers')">Customer</div>
+    <div class="tab" onclick="switchTab('vehicles')">Armada</div>
+    <div class="tab" onclick="switchTab('analytics')">Analitik</div>
+  </div>
+
+  <!-- Tab Panels -->
+  <div class="tab-panels">
+
+    <!-- Routes -->
+    <div class="tab-panel active" id="panel-routes">
+      <!-- Timeline -->
+      <div class="timeline-wrap">
+        <div class="tl-title"><i class="fa-solid fa-timeline"></i> Gantt Timeline Operasional</div>
+        
+        <div class="tl-row">
+          <div class="tl-label" title="R1 - Motorcycle">
+            <span class="tl-dot" style="background:#E63946"></span>
+            R1
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:53.96%"></div>
+            <div class="tl-seg drive"  style="width:8.19%" title="Nyetir 85m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">561→780</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R2 - Motorcycle">
+            <span class="tl-dot" style="background:#457B9D"></span>
+            R2
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:82.14%"></div>
+            <div class="tl-seg drive"  style="width:5.01%" title="Nyetir 52m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">855→1040</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R3 - Van">
+            <span class="tl-dot" style="background:#2A9D8F"></span>
+            R3
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:39.04%"></div>
+            <div class="tl-seg drive"  style="width:14.03%" title="Nyetir 146m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">406→730</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R4 - Motorcycle">
+            <span class="tl-dot" style="background:#E9C46A"></span>
+            R4
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:61.75%"></div>
+            <div class="tl-seg drive"  style="width:10.80%" title="Nyetir 112m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">642→933</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R5 - Motorcycle">
+            <span class="tl-dot" style="background:#F4A261"></span>
+            R5
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:20.38%"></div>
+            <div class="tl-seg drive"  style="width:11.09%" title="Nyetir 115m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:1.17%"  title="Tunggu 12m"></div>
+          </div>
+          <div class="tl-info">212→473</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R6 - Motorcycle">
+            <span class="tl-dot" style="background:#264653"></span>
+            R6
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:57.55%"></div>
+            <div class="tl-seg drive"  style="width:10.25%" title="Nyetir 107m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">599→839</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R7 - Motorcycle">
+            <span class="tl-dot" style="background:#A8DADC"></span>
+            R7
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:63.99%"></div>
+            <div class="tl-seg drive"  style="width:12.21%" title="Nyetir 127m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">666→926</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R8 - Motorcycle">
+            <span class="tl-dot" style="background:#8338EC"></span>
+            R8
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:60.99%"></div>
+            <div class="tl-seg drive"  style="width:12.01%" title="Nyetir 125m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">634→893</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R9 - Motorcycle">
+            <span class="tl-dot" style="background:#FB5607"></span>
+            R9
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:48.61%"></div>
+            <div class="tl-seg drive"  style="width:15.01%" title="Nyetir 156m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">506→796</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R10 - Motorcycle">
+            <span class="tl-dot" style="background:#3A86FF"></span>
+            R10
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:22.03%"></div>
+            <div class="tl-seg drive"  style="width:14.02%" title="Nyetir 146m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">229→509</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R11 - Motorcycle">
+            <span class="tl-dot" style="background:#06D6A0"></span>
+            R11
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:17.05%"></div>
+            <div class="tl-seg drive"  style="width:11.73%" title="Nyetir 122m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">177→433</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R12 - Motorcycle">
+            <span class="tl-dot" style="background:#FFB703"></span>
+            R12
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:42.21%"></div>
+            <div class="tl-seg drive"  style="width:8.62%" title="Nyetir 90m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">439→662</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R13 - Motorcycle">
+            <span class="tl-dot" style="background:#CB4335"></span>
+            R13
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:36.60%"></div>
+            <div class="tl-seg drive"  style="width:9.57%" title="Nyetir 100m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">381→614</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R14 - Motorcycle">
+            <span class="tl-dot" style="background:#1B4F72"></span>
+            R14
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:27.70%"></div>
+            <div class="tl-seg drive"  style="width:11.94%" title="Nyetir 124m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">288→546</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R15 - Motorcycle">
+            <span class="tl-dot" style="background:#7D3C98"></span>
+            R15
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:27.14%"></div>
+            <div class="tl-seg drive"  style="width:13.80%" title="Nyetir 144m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">282→560</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R16 - Motorcycle">
+            <span class="tl-dot" style="background:#2ECC71"></span>
+            R16
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:22.79%"></div>
+            <div class="tl-seg drive"  style="width:14.45%" title="Nyetir 150m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">237→521</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R17 - Motorcycle">
+            <span class="tl-dot" style="background:#E74C3C"></span>
+            R17
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:43.89%"></div>
+            <div class="tl-seg drive"  style="width:9.83%" title="Nyetir 102m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.65%"  title="Tunggu 7m"></div>
+          </div>
+          <div class="tl-info">457→744</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R18 - Motorcycle">
+            <span class="tl-dot" style="background:#3498DB"></span>
+            R18
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:18.03%"></div>
+            <div class="tl-seg drive"  style="width:15.53%" title="Nyetir 162m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">188→483</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R19 - Motorcycle">
+            <span class="tl-dot" style="background:#F39C12"></span>
+            R19
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:45.46%"></div>
+            <div class="tl-seg drive"  style="width:14.12%" title="Nyetir 147m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">473→753</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R20 - Motorcycle">
+            <span class="tl-dot" style="background:#16A085"></span>
+            R20
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:22.48%"></div>
+            <div class="tl-seg drive"  style="width:11.42%" title="Nyetir 119m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">234→486</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R21 - Motorcycle">
+            <span class="tl-dot" style="background:#E63946"></span>
+            R21
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:64.99%"></div>
+            <div class="tl-seg drive"  style="width:7.10%" title="Nyetir 74m"></div>
+            <div class="tl-seg svc"    style="width:8.56%"   title="Servis 89m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">676→839</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R22 - Motorcycle">
+            <span class="tl-dot" style="background:#457B9D"></span>
+            R22
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:19.44%"></div>
+            <div class="tl-seg drive"  style="width:11.56%" title="Nyetir 120m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">202→501</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R23 - Motorcycle">
+            <span class="tl-dot" style="background:#2A9D8F"></span>
+            R23
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:11.99%"></div>
+            <div class="tl-seg drive"  style="width:11.12%" title="Nyetir 116m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">125→419</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R24 - Motorcycle">
+            <span class="tl-dot" style="background:#E9C46A"></span>
+            R24
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:11.20%"></div>
+            <div class="tl-seg drive"  style="width:9.45%" title="Nyetir 98m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">116→348</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R25 - Van">
+            <span class="tl-dot" style="background:#F4A261"></span>
+            R25
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:15.98%"></div>
+            <div class="tl-seg drive"  style="width:20.26%" title="Nyetir 211m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">166→555</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R26 - Motorcycle">
+            <span class="tl-dot" style="background:#264653"></span>
+            R26
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:22.79%"></div>
+            <div class="tl-seg drive"  style="width:14.74%" title="Nyetir 153m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">237→524</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R27 - Van">
+            <span class="tl-dot" style="background:#A8DADC"></span>
+            R27
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:30.06%"></div>
+            <div class="tl-seg drive"  style="width:21.77%" title="Nyetir 227m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">313→717</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R28 - Motorcycle">
+            <span class="tl-dot" style="background:#8338EC"></span>
+            R28
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:39.50%"></div>
+            <div class="tl-seg drive"  style="width:8.24%" title="Nyetir 86m"></div>
+            <div class="tl-seg svc"    style="width:12.84%"   title="Servis 134m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">411→630</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R29 - Motorcycle">
+            <span class="tl-dot" style="background:#FB5607"></span>
+            R29
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:29.54%"></div>
+            <div class="tl-seg drive"  style="width:11.66%" title="Nyetir 121m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">307→607</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R30 - Motorcycle">
+            <span class="tl-dot" style="background:#3A86FF"></span>
+            R30
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:39.60%"></div>
+            <div class="tl-seg drive"  style="width:7.16%" title="Nyetir 74m"></div>
+            <div class="tl-seg svc"    style="width:17.13%"   title="Servis 178m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">412→665</div>
+        </div>
+
+        <div class="tl-row">
+          <div class="tl-label" title="R31 - Motorcycle">
+            <span class="tl-dot" style="background:#06D6A0"></span>
+            R31
+          </div>
+          <div class="tl-bar-wrap">
+            <div class="tl-spacer" style="width:57.94%"></div>
+            <div class="tl-seg drive"  style="width:7.86%" title="Nyetir 82m"></div>
+            <div class="tl-seg svc"    style="width:8.56%"   title="Servis 89m"></div>
+            <div class="tl-seg wait"   style="width:0.00%"  title="Tunggu 0m"></div>
+          </div>
+          <div class="tl-info">603→774</div>
+        </div>
+        <div class="tl-legend">
+          <div class="tl-legend-item"><div class="tl-legend-dot" style="background:#3b82f6"></div>Nyetir</div>
+          <div class="tl-legend-item"><div class="tl-legend-dot" style="background:#22c55e"></div>Servis</div>
+          <div class="tl-legend-item"><div class="tl-legend-dot" style="background:#f59e0b"></div>Tunggu</div>
+        </div>
+      </div>
+      
+        <div class="rcard" data-route-id="1" data-vtype="motorcycle"
+             onclick="focusRoute(1)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#E63946">R1</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 93.8 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">10.7</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 93%">
+            <div class="cap-bar" style="width:93.3%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>561m</b></div>
+            <div><span>Ret</span><b>780m</b></div>
+            <div><span>Drive</span><b>85m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>56/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="2" data-vtype="motorcycle"
+             onclick="focusRoute(2)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#457B9D">R2</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 57.3 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">7.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 65%">
+            <div class="cap-bar" style="width:65.0%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>855m</b></div>
+            <div><span>Ret</span><b>1040m</b></div>
+            <div><span>Drive</span><b>52m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>39/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="3" data-vtype="van"
+             onclick="focusRoute(3)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#2A9D8F">R3</div>
+              <div>
+                <div class="rcard-title">Van</div>
+                <div class="rcard-sub">4 customer · 145.9 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">48.2</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 80%">
+            <div class="cap-bar" style="width:80.0%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>406m</b></div>
+            <div><span>Ret</span><b>730m</b></div>
+            <div><span>Drive</span><b>146m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>120/150</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="4" data-vtype="motorcycle"
+             onclick="focusRoute(4)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#E9C46A">R4</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 123.6 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">14.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 83%">
+            <div class="cap-bar" style="width:83.3%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>642m</b></div>
+            <div><span>Ret</span><b>933m</b></div>
+            <div><span>Drive</span><b>112m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>50/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="5" data-vtype="motorcycle"
+             onclick="focusRoute(5)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#F4A261">R5</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 126.9 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">14.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 88%">
+            <div class="cap-bar" style="width:88.3%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>212m</b></div>
+            <div><span>Ret</span><b>473m</b></div>
+            <div><span>Drive</span><b>115m</b></div>
+            <div><span>Wait</span><b>12m</b></div>
+            <div><span>Load</span><b>53/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="6" data-vtype="motorcycle"
+             onclick="focusRoute(6)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#264653">R6</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 117.3 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">13.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 63%">
+            <div class="cap-bar" style="width:63.3%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>599m</b></div>
+            <div><span>Ret</span><b>839m</b></div>
+            <div><span>Drive</span><b>107m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>38/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="7" data-vtype="motorcycle"
+             onclick="focusRoute(7)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#A8DADC">R7</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 139.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">15.3</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 82%">
+            <div class="cap-bar" style="width:81.7%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>666m</b></div>
+            <div><span>Ret</span><b>926m</b></div>
+            <div><span>Drive</span><b>127m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>49/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="8" data-vtype="motorcycle"
+             onclick="focusRoute(8)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#8338EC">R8</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 137.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">15.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 78%">
+            <div class="cap-bar" style="width:78.3%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>634m</b></div>
+            <div><span>Ret</span><b>893m</b></div>
+            <div><span>Drive</span><b>125m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>47/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="9" data-vtype="motorcycle"
+             onclick="focusRoute(9)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#FB5607">R9</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 171.8 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">18.5</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>506m</b></div>
+            <div><span>Ret</span><b>796m</b></div>
+            <div><span>Drive</span><b>156m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="10" data-vtype="motorcycle"
+             onclick="focusRoute(10)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#3A86FF">R10</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 160.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">17.4</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 83%">
+            <div class="cap-bar" style="width:83.3%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>229m</b></div>
+            <div><span>Ret</span><b>509m</b></div>
+            <div><span>Drive</span><b>146m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>50/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="11" data-vtype="motorcycle"
+             onclick="focusRoute(11)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#06D6A0">R11</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 134.2 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">14.8</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>177m</b></div>
+            <div><span>Ret</span><b>433m</b></div>
+            <div><span>Drive</span><b>122m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="12" data-vtype="motorcycle"
+             onclick="focusRoute(12)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#FFB703">R12</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 98.6 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">11.2</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 68%">
+            <div class="cap-bar" style="width:68.3%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>439m</b></div>
+            <div><span>Ret</span><b>662m</b></div>
+            <div><span>Drive</span><b>90m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>41/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="13" data-vtype="motorcycle"
+             onclick="focusRoute(13)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#CB4335">R13</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 109.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">12.3</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>381m</b></div>
+            <div><span>Ret</span><b>614m</b></div>
+            <div><span>Drive</span><b>100m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="14" data-vtype="motorcycle"
+             onclick="focusRoute(14)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#1B4F72">R14</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 136.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">15.0</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>288m</b></div>
+            <div><span>Ret</span><b>546m</b></div>
+            <div><span>Drive</span><b>124m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="15" data-vtype="motorcycle"
+             onclick="focusRoute(15)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#7D3C98">R15</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 158.0 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">17.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 68%">
+            <div class="cap-bar" style="width:68.3%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>282m</b></div>
+            <div><span>Ret</span><b>560m</b></div>
+            <div><span>Drive</span><b>144m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>41/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="16" data-vtype="motorcycle"
+             onclick="focusRoute(16)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#2ECC71">R16</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 165.3 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">17.9</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 87%">
+            <div class="cap-bar" style="width:86.7%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>237m</b></div>
+            <div><span>Ret</span><b>521m</b></div>
+            <div><span>Drive</span><b>150m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>52/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="17" data-vtype="motorcycle"
+             onclick="focusRoute(17)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#E74C3C">R17</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 112.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">13.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 95%">
+            <div class="cap-bar" style="width:95.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>457m</b></div>
+            <div><span>Ret</span><b>744m</b></div>
+            <div><span>Drive</span><b>102m</b></div>
+            <div><span>Wait</span><b>7m</b></div>
+            <div><span>Load</span><b>57/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="18" data-vtype="motorcycle"
+             onclick="focusRoute(18)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#3498DB">R18</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 177.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">19.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 72%">
+            <div class="cap-bar" style="width:71.7%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>188m</b></div>
+            <div><span>Ret</span><b>483m</b></div>
+            <div><span>Drive</span><b>162m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>43/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="19" data-vtype="motorcycle"
+             onclick="focusRoute(19)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#F39C12">R19</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 161.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">17.5</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>473m</b></div>
+            <div><span>Ret</span><b>753m</b></div>
+            <div><span>Drive</span><b>147m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="20" data-vtype="motorcycle"
+             onclick="focusRoute(20)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#16A085">R20</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 130.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">14.4</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 72%">
+            <div class="cap-bar" style="width:71.7%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>234m</b></div>
+            <div><span>Ret</span><b>486m</b></div>
+            <div><span>Drive</span><b>119m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>43/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="21" data-vtype="motorcycle"
+             onclick="focusRoute(21)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#E63946">R21</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">2 customer · 81.2 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">9.0</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>676m</b></div>
+            <div><span>Ret</span><b>839m</b></div>
+            <div><span>Drive</span><b>74m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="22" data-vtype="motorcycle"
+             onclick="focusRoute(22)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#457B9D">R22</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 132.3 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">15.0</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 75%">
+            <div class="cap-bar" style="width:75.0%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>202m</b></div>
+            <div><span>Ret</span><b>501m</b></div>
+            <div><span>Drive</span><b>120m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>45/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="23" data-vtype="motorcycle"
+             onclick="focusRoute(23)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#2A9D8F">R23</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 127.2 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">14.5</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 100%">
+            <div class="cap-bar" style="width:100.0%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>125m</b></div>
+            <div><span>Ret</span><b>419m</b></div>
+            <div><span>Drive</span><b>116m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>60/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="24" data-vtype="motorcycle"
+             onclick="focusRoute(24)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#E9C46A">R24</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 108.1 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">12.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 40%">
+            <div class="cap-bar" style="width:40.0%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>116m</b></div>
+            <div><span>Ret</span><b>348m</b></div>
+            <div><span>Drive</span><b>98m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>24/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="25" data-vtype="van"
+             onclick="focusRoute(25)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#F4A261">R25</div>
+              <div>
+                <div class="rcard-title">Van</div>
+                <div class="rcard-sub">4 customer · 210.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">67.7</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 47%">
+            <div class="cap-bar" style="width:47.3%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>166m</b></div>
+            <div><span>Ret</span><b>555m</b></div>
+            <div><span>Drive</span><b>211m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>71/150</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="26" data-vtype="motorcycle"
+             onclick="focusRoute(26)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#264653">R26</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 168.7 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">18.2</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 98%">
+            <div class="cap-bar" style="width:98.3%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>237m</b></div>
+            <div><span>Ret</span><b>524m</b></div>
+            <div><span>Drive</span><b>153m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>59/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="27" data-vtype="van"
+             onclick="focusRoute(27)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#A8DADC">R27</div>
+              <div>
+                <div class="rcard-title">Van</div>
+                <div class="rcard-sub">4 customer · 226.5 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">72.4</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 82%">
+            <div class="cap-bar" style="width:82.0%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>313m</b></div>
+            <div><span>Ret</span><b>717m</b></div>
+            <div><span>Drive</span><b>227m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>123/150</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="28" data-vtype="motorcycle"
+             onclick="focusRoute(28)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#8338EC">R28</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">3 customer · 94.3 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">10.8</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 85%">
+            <div class="cap-bar" style="width:85.0%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>411m</b></div>
+            <div><span>Ret</span><b>630m</b></div>
+            <div><span>Drive</span><b>86m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>51/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="29" data-vtype="motorcycle"
+             onclick="focusRoute(29)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#FB5607">R29</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 133.4 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">15.1</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 73%">
+            <div class="cap-bar" style="width:73.3%;background:#22c55e"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>307m</b></div>
+            <div><span>Ret</span><b>607m</b></div>
+            <div><span>Drive</span><b>121m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>44/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="30" data-vtype="motorcycle"
+             onclick="focusRoute(30)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#3A86FF">R30</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">4 customer · 81.9 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">10.0</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 98%">
+            <div class="cap-bar" style="width:98.3%;background:#ef4444"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>412m</b></div>
+            <div><span>Ret</span><b>665m</b></div>
+            <div><span>Drive</span><b>74m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>59/60</b></div>
+          </div>
+        </div>
+
+        <div class="rcard" data-route-id="31" data-vtype="motorcycle"
+             onclick="focusRoute(31)">
+          <div class="rcard-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="rbadge" style="background:#06D6A0">R31</div>
+              <div>
+                <div class="rcard-title">Motorcycle</div>
+                <div class="rcard-sub">2 customer · 90.0 km</div>
+              </div>
+            </div>
+            <div class="rcard-emit" title="Emisi kgCO2">9.9</div>
+          </div>
+          <div class="cap-bar-wrap" title="Utilisasi kapasitas 82%">
+            <div class="cap-bar" style="width:81.7%;background:#f59e0b"></div>
+          </div>
+          <div class="rcard-stats">
+            <div><span>Dep</span><b>603m</b></div>
+            <div><span>Ret</span><b>774m</b></div>
+            <div><span>Drive</span><b>82m</b></div>
+            <div><span>Wait</span><b>0m</b></div>
+            <div><span>Load</span><b>49/60</b></div>
+          </div>
+        </div>
+    </div>
+
+    <!-- Customers -->
+    <div class="tab-panel" id="panel-customers">
+      <input class="search-box" id="csearch" placeholder="🔍  Cari: C12 · demand 30 · route R3 ..." oninput="searchCustomers()"/>
+      <div class="ctable-wrap">
+        <table class="ctable">
+          <thead>
+            <tr>
+              <th>ID</th><th>Demand</th><th>TW</th><th>Svc</th><th>Rute</th><th>Kend.</th>
+            </tr>
+          </thead>
+          <tbody id="ctbody">
+            
+        <tr class="crow" data-cid="1" onclick="focusCustomer(1)">
+          <td><span class="ctag">C1</span></td>
+          <td>20</td>
+          <td>646–780</td>
+          <td>45</td>
+          <td>R21</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="2" onclick="focusCustomer(2)">
+          <td><span class="ctag">C2</span></td>
+          <td>30</td>
+          <td>223–356</td>
+          <td>45</td>
+          <td>R27</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="3" onclick="focusCustomer(3)">
+          <td><span class="ctag">C3</span></td>
+          <td>10</td>
+          <td>486–619</td>
+          <td>45</td>
+          <td>R29</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="4" onclick="focusCustomer(4)">
+          <td><span class="ctag">C4</span></td>
+          <td>40</td>
+          <td>628–762</td>
+          <td>45</td>
+          <td>R21</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="5" onclick="focusCustomer(5)">
+          <td><span class="ctag">C5</span></td>
+          <td>20</td>
+          <td>183–316</td>
+          <td>45</td>
+          <td>R22</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="6" onclick="focusCustomer(6)">
+          <td><span class="ctag">C6</span></td>
+          <td>20</td>
+          <td>423–557</td>
+          <td>45</td>
+          <td>R30</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="7" onclick="focusCustomer(7)">
+          <td><span class="ctag">C7</span></td>
+          <td>20</td>
+          <td>352–486</td>
+          <td>45</td>
+          <td>R12</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="8" onclick="focusCustomer(8)">
+          <td><span class="ctag">C8</span></td>
+          <td>10</td>
+          <td>405–539</td>
+          <td>45</td>
+          <td>R30</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="9" onclick="focusCustomer(9)">
+          <td><span class="ctag">C9</span></td>
+          <td>20</td>
+          <td>405–539</td>
+          <td>45</td>
+          <td>R13</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="10" onclick="focusCustomer(10)">
+          <td><span class="ctag">C10</span></td>
+          <td>30</td>
+          <td>530–664</td>
+          <td>45</td>
+          <td>R31</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="11" onclick="focusCustomer(11)">
+          <td><span class="ctag">C11</span></td>
+          <td>40</td>
+          <td>263–396</td>
+          <td>45</td>
+          <td>R26</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="12" onclick="focusCustomer(12)">
+          <td><span class="ctag">C12</span></td>
+          <td>20</td>
+          <td>285–419</td>
+          <td>45</td>
+          <td>R14</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="13" onclick="focusCustomer(13)">
+          <td><span class="ctag">C13</span></td>
+          <td>10</td>
+          <td>633–766</td>
+          <td>45</td>
+          <td>R6</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="14" onclick="focusCustomer(14)">
+          <td><span class="ctag">C14</span></td>
+          <td>10</td>
+          <td>156–290</td>
+          <td>45</td>
+          <td>R25</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="15" onclick="focusCustomer(15)">
+          <td><span class="ctag">C15</span></td>
+          <td>20</td>
+          <td>258–392</td>
+          <td>45</td>
+          <td>R20</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="16" onclick="focusCustomer(16)">
+          <td><span class="ctag">C16</span></td>
+          <td>20</td>
+          <td>321–454</td>
+          <td>45</td>
+          <td>R29</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="17" onclick="focusCustomer(17)">
+          <td><span class="ctag">C17</span></td>
+          <td>20</td>
+          <td>664–797</td>
+          <td>45</td>
+          <td>R6</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="18" onclick="focusCustomer(18)">
+          <td><span class="ctag">C18</span></td>
+          <td>20</td>
+          <td>388–521</td>
+          <td>45</td>
+          <td>R5</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="19" onclick="focusCustomer(19)">
+          <td><span class="ctag">C19</span></td>
+          <td>40</td>
+          <td>321–454</td>
+          <td>45</td>
+          <td>R3</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="20" onclick="focusCustomer(20)">
+          <td><span class="ctag">C20</span></td>
+          <td>10</td>
+          <td>543–677</td>
+          <td>45</td>
+          <td>R19</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="21" onclick="focusCustomer(21)">
+          <td><span class="ctag">C21</span></td>
+          <td>10</td>
+          <td>298–432</td>
+          <td>45</td>
+          <td>R10</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="22" onclick="focusCustomer(22)">
+          <td><span class="ctag">C22</span></td>
+          <td>40</td>
+          <td>410–543</td>
+          <td>45</td>
+          <td>R3</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="23" onclick="focusCustomer(23)">
+          <td><span class="ctag">C23</span></td>
+          <td>30</td>
+          <td>290–423</td>
+          <td>45</td>
+          <td>R10</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="24" onclick="focusCustomer(24)">
+          <td><span class="ctag">C24</span></td>
+          <td>10</td>
+          <td>659–793</td>
+          <td>45</td>
+          <td>R4</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="25" onclick="focusCustomer(25)">
+          <td><span class="ctag">C25</span></td>
+          <td>20</td>
+          <td>686–820</td>
+          <td>45</td>
+          <td>R8</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="26" onclick="focusCustomer(26)">
+          <td><span class="ctag">C26</span></td>
+          <td>30</td>
+          <td>512–646</td>
+          <td>45</td>
+          <td>R9</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="27" onclick="focusCustomer(27)">
+          <td><span class="ctag">C27</span></td>
+          <td>20</td>
+          <td>276–410</td>
+          <td>45</td>
+          <td>R25</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="28" onclick="focusCustomer(28)">
+          <td><span class="ctag">C28</span></td>
+          <td>10</td>
+          <td>276–410</td>
+          <td>45</td>
+          <td>R10</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="29" onclick="focusCustomer(29)">
+          <td><span class="ctag">C29</span></td>
+          <td>10</td>
+          <td>298–432</td>
+          <td>45</td>
+          <td>R26</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="30" onclick="focusCustomer(30)">
+          <td><span class="ctag">C30</span></td>
+          <td>10</td>
+          <td>330–463</td>
+          <td>45</td>
+          <td>R25</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="31" onclick="focusCustomer(31)">
+          <td><span class="ctag">C31</span></td>
+          <td>20</td>
+          <td>272–405</td>
+          <td>45</td>
+          <td>R23</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="32" onclick="focusCustomer(32)">
+          <td><span class="ctag">C32</span></td>
+          <td>10</td>
+          <td>584–717</td>
+          <td>45</td>
+          <td>R3</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="33" onclick="focusCustomer(33)">
+          <td><span class="ctag">C33</span></td>
+          <td>10</td>
+          <td>227–361</td>
+          <td>45</td>
+          <td>R23</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="34" onclick="focusCustomer(34)">
+          <td><span class="ctag">C34</span></td>
+          <td>30</td>
+          <td>494–628</td>
+          <td>45</td>
+          <td>R19</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="35" onclick="focusCustomer(35)">
+          <td><span class="ctag">C35</span></td>
+          <td>20</td>
+          <td>619–753</td>
+          <td>45</td>
+          <td>R9</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="36" onclick="focusCustomer(36)">
+          <td><span class="ctag">C36</span></td>
+          <td>40</td>
+          <td>192–325</td>
+          <td>45</td>
+          <td>R11</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="37" onclick="focusCustomer(37)">
+          <td><span class="ctag">C37</span></td>
+          <td>10</td>
+          <td>552–686</td>
+          <td>45</td>
+          <td>R1</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="38" onclick="focusCustomer(38)">
+          <td><span class="ctag">C38</span></td>
+          <td>30</td>
+          <td>334–468</td>
+          <td>45</td>
+          <td>R14</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="39" onclick="focusCustomer(39)">
+          <td><span class="ctag">C39</span></td>
+          <td>10</td>
+          <td>165–298</td>
+          <td>45</td>
+          <td>R22</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="40" onclick="focusCustomer(40)">
+          <td><span class="ctag">C40</span></td>
+          <td>30</td>
+          <td>379–512</td>
+          <td>45</td>
+          <td>R16</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="41" onclick="focusCustomer(41)">
+          <td><span class="ctag">C41</span></td>
+          <td>20</td>
+          <td>410–543</td>
+          <td>45</td>
+          <td>R19</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="42" onclick="focusCustomer(42)">
+          <td><span class="ctag">C42</span></td>
+          <td>10</td>
+          <td>147–281</td>
+          <td>45</td>
+          <td>R24</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="43" onclick="focusCustomer(43)">
+          <td><span class="ctag">C43</span></td>
+          <td>20</td>
+          <td>570–704</td>
+          <td>45</td>
+          <td>R1</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="44" onclick="focusCustomer(44)">
+          <td><span class="ctag">C44</span></td>
+          <td>10</td>
+          <td>285–419</td>
+          <td>45</td>
+          <td>R14</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="45" onclick="focusCustomer(45)">
+          <td><span class="ctag">C45</span></td>
+          <td>10</td>
+          <td>165–298</td>
+          <td>45</td>
+          <td>R18</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="46" onclick="focusCustomer(46)">
+          <td><span class="ctag">C46</span></td>
+          <td>10</td>
+          <td>503–637</td>
+          <td>45</td>
+          <td>R30</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="47" onclick="focusCustomer(47)">
+          <td><span class="ctag">C47</span></td>
+          <td>10</td>
+          <td>200–334</td>
+          <td>45</td>
+          <td>R15</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="48" onclick="focusCustomer(48)">
+          <td><span class="ctag">C48</span></td>
+          <td>10</td>
+          <td>673–806</td>
+          <td>45</td>
+          <td>R8</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="49" onclick="focusCustomer(49)">
+          <td><span class="ctag">C49</span></td>
+          <td>10</td>
+          <td>463–597</td>
+          <td>45</td>
+          <td>R28</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="50" onclick="focusCustomer(50)">
+          <td><span class="ctag">C50</span></td>
+          <td>30</td>
+          <td>517–650</td>
+          <td>45</td>
+          <td>R3</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="51" onclick="focusCustomer(51)">
+          <td><span class="ctag">C51</span></td>
+          <td>19</td>
+          <td>370–503</td>
+          <td>45</td>
+          <td>R18</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="52" onclick="focusCustomer(52)">
+          <td><span class="ctag">C52</span></td>
+          <td>3</td>
+          <td>232–365</td>
+          <td>45</td>
+          <td>R16</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="53" onclick="focusCustomer(53)">
+          <td><span class="ctag">C53</span></td>
+          <td>5</td>
+          <td>405–539</td>
+          <td>45</td>
+          <td>R12</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="54" onclick="focusCustomer(54)">
+          <td><span class="ctag">C54</span></td>
+          <td>16</td>
+          <td>619–753</td>
+          <td>45</td>
+          <td>R17</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="55" onclick="focusCustomer(55)">
+          <td><span class="ctag">C55</span></td>
+          <td>16</td>
+          <td>624–757</td>
+          <td>45</td>
+          <td>R17</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="56" onclick="focusCustomer(56)">
+          <td><span class="ctag">C56</span></td>
+          <td>19</td>
+          <td>579–713</td>
+          <td>45</td>
+          <td>R31</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="57" onclick="focusCustomer(57)">
+          <td><span class="ctag">C57</span></td>
+          <td>23</td>
+          <td>428–561</td>
+          <td>45</td>
+          <td>R28</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="58" onclick="focusCustomer(58)">
+          <td><span class="ctag">C58</span></td>
+          <td>20</td>
+          <td>677–811</td>
+          <td>45</td>
+          <td>R4</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="59" onclick="focusCustomer(59)">
+          <td><span class="ctag">C59</span></td>
+          <td>19</td>
+          <td>187–321</td>
+          <td>45</td>
+          <td>R16</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="60" onclick="focusCustomer(60)">
+          <td><span class="ctag">C60</span></td>
+          <td>17</td>
+          <td>690–824</td>
+          <td>45</td>
+          <td>R8</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="61" onclick="focusCustomer(61)">
+          <td><span class="ctag">C61</span></td>
+          <td>9</td>
+          <td>294–428</td>
+          <td>45</td>
+          <td>R22</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="62" onclick="focusCustomer(62)">
+          <td><span class="ctag">C62</span></td>
+          <td>3</td>
+          <td>232–365</td>
+          <td>45</td>
+          <td>R11</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="63" onclick="focusCustomer(63)">
+          <td><span class="ctag">C63</span></td>
+          <td>6</td>
+          <td>174–307</td>
+          <td>45</td>
+          <td>R5</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="64" onclick="focusCustomer(64)">
+          <td><span class="ctag">C64</span></td>
+          <td>17</td>
+          <td>236–370</td>
+          <td>45</td>
+          <td>R11</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="65" onclick="focusCustomer(65)">
+          <td><span class="ctag">C65</span></td>
+          <td>16</td>
+          <td>49–183</td>
+          <td>45</td>
+          <td>R23</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="66" onclick="focusCustomer(66)">
+          <td><span class="ctag">C66</span></td>
+          <td>16</td>
+          <td>592–726</td>
+          <td>45</td>
+          <td>R12</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="67" onclick="focusCustomer(67)">
+          <td><span class="ctag">C67</span></td>
+          <td>9</td>
+          <td>312–445</td>
+          <td>45</td>
+          <td>R26</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="68" onclick="focusCustomer(68)">
+          <td><span class="ctag">C68</span></td>
+          <td>21</td>
+          <td>641–775</td>
+          <td>45</td>
+          <td>R7</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="69" onclick="focusCustomer(69)">
+          <td><span class="ctag">C69</span></td>
+          <td>27</td>
+          <td>183–316</td>
+          <td>45</td>
+          <td>R5</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="70" onclick="focusCustomer(70)">
+          <td><span class="ctag">C70</span></td>
+          <td>23</td>
+          <td>802–935</td>
+          <td>45</td>
+          <td>R2</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="71" onclick="focusCustomer(71)">
+          <td><span class="ctag">C71</span></td>
+          <td>14</td>
+          <td>290–423</td>
+          <td>45</td>
+          <td>R20</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="72" onclick="focusCustomer(72)">
+          <td><span class="ctag">C72</span></td>
+          <td>8</td>
+          <td>134–267</td>
+          <td>45</td>
+          <td>R24</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="73" onclick="focusCustomer(73)">
+          <td><span class="ctag">C73</span></td>
+          <td>5</td>
+          <td>343–477</td>
+          <td>45</td>
+          <td>R29</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="74" onclick="focusCustomer(74)">
+          <td><span class="ctag">C74</span></td>
+          <td>8</td>
+          <td>628–762</td>
+          <td>45</td>
+          <td>R6</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="75" onclick="focusCustomer(75)">
+          <td><span class="ctag">C75</span></td>
+          <td>16</td>
+          <td>330–463</td>
+          <td>45</td>
+          <td>R15</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="76" onclick="focusCustomer(76)">
+          <td><span class="ctag">C76</span></td>
+          <td>31</td>
+          <td>334–468</td>
+          <td>45</td>
+          <td>R25</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="77" onclick="focusCustomer(77)">
+          <td><span class="ctag">C77</span></td>
+          <td>7</td>
+          <td>668–802</td>
+          <td>45</td>
+          <td>R4</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="78" onclick="focusCustomer(78)">
+          <td><span class="ctag">C78</span></td>
+          <td>27</td>
+          <td>401–535</td>
+          <td>45</td>
+          <td>R13</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="79" onclick="focusCustomer(79)">
+          <td><span class="ctag">C79</span></td>
+          <td>30</td>
+          <td>396–530</td>
+          <td>45</td>
+          <td>R27</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="80" onclick="focusCustomer(80)">
+          <td><span class="ctag">C80</span></td>
+          <td>13</td>
+          <td>855–989</td>
+          <td>45</td>
+          <td>R2</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="81" onclick="focusCustomer(81)">
+          <td><span class="ctag">C81</span></td>
+          <td>10</td>
+          <td>383–517</td>
+          <td>45</td>
+          <td>R9</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="82" onclick="focusCustomer(82)">
+          <td><span class="ctag">C82</span></td>
+          <td>9</td>
+          <td>187–321</td>
+          <td>45</td>
+          <td>R29</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="83" onclick="focusCustomer(83)">
+          <td><span class="ctag">C83</span></td>
+          <td>14</td>
+          <td>156–290</td>
+          <td>45</td>
+          <td>R18</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="84" onclick="focusCustomer(84)">
+          <td><span class="ctag">C84</span></td>
+          <td>18</td>
+          <td>428–561</td>
+          <td>45</td>
+          <td>R28</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="85" onclick="focusCustomer(85)">
+          <td><span class="ctag">C85</span></td>
+          <td>2</td>
+          <td>388–521</td>
+          <td>45</td>
+          <td>R17</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="86" onclick="focusCustomer(86)">
+          <td><span class="ctag">C86</span></td>
+          <td>28</td>
+          <td>388–521</td>
+          <td>45</td>
+          <td>R27</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="87" onclick="focusCustomer(87)">
+          <td><span class="ctag">C87</span></td>
+          <td>13</td>
+          <td>401–535</td>
+          <td>45</td>
+          <td>R13</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="88" onclick="focusCustomer(88)">
+          <td><span class="ctag">C88</span></td>
+          <td>19</td>
+          <td>298–432</td>
+          <td>45</td>
+          <td>R30</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="89" onclick="focusCustomer(89)">
+          <td><span class="ctag">C89</span></td>
+          <td>25</td>
+          <td>641–775</td>
+          <td>45</td>
+          <td>R7</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="90" onclick="focusCustomer(90)">
+          <td><span class="ctag">C90</span></td>
+          <td>6</td>
+          <td>383–517</td>
+          <td>45</td>
+          <td>R22</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="91" onclick="focusCustomer(91)">
+          <td><span class="ctag">C91</span></td>
+          <td>13</td>
+          <td>744–878</td>
+          <td>45</td>
+          <td>R4</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="92" onclick="focusCustomer(92)">
+          <td><span class="ctag">C92</span></td>
+          <td>14</td>
+          <td>62–196</td>
+          <td>45</td>
+          <td>R23</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="93" onclick="focusCustomer(93)">
+          <td><span class="ctag">C93</span></td>
+          <td>3</td>
+          <td>793–927</td>
+          <td>45</td>
+          <td>R7</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="94" onclick="focusCustomer(94)">
+          <td><span class="ctag">C94</span></td>
+          <td>23</td>
+          <td>423–557</td>
+          <td>45</td>
+          <td>R17</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="95" onclick="focusCustomer(95)">
+          <td><span class="ctag">C95</span></td>
+          <td>6</td>
+          <td>151–285</td>
+          <td>45</td>
+          <td>R24</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="96" onclick="focusCustomer(96)">
+          <td><span class="ctag">C96</span></td>
+          <td>26</td>
+          <td>588–722</td>
+          <td>45</td>
+          <td>R1</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="97" onclick="focusCustomer(97)">
+          <td><span class="ctag">C97</span></td>
+          <td>35</td>
+          <td>535–668</td>
+          <td>45</td>
+          <td>R27</td>
+          <td>Van</td>
+        </tr>
+
+        <tr class="crow" data-cid="98" onclick="focusCustomer(98)">
+          <td><span class="ctag">C98</span></td>
+          <td>9</td>
+          <td>205–339</td>
+          <td>45</td>
+          <td>R20</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="99" onclick="focusCustomer(99)">
+          <td><span class="ctag">C99</span></td>
+          <td>15</td>
+          <td>343–477</td>
+          <td>45</td>
+          <td>R15</td>
+          <td>Motorcycle</td>
+        </tr>
+
+        <tr class="crow" data-cid="100" onclick="focusCustomer(100)">
+          <td><span class="ctag">C100</span></td>
+          <td>3</td>
+          <td>802–935</td>
+          <td>45</td>
+          <td>R2</td>
+          <td>Motorcycle</td>
+        </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Vehicles -->
+    <div class="tab-panel" id="panel-vehicles">
+      
+        <div class="vcard" style="border-top:3px solid #3A86FF">
+          <div class="vcard-head">
+            <div class="vcard-icon" style="background:#3A86FF20;color:#3A86FF">
+              <i class="fa-solid fa-motorcycle"></i>
+            </div>
+            <div>
+              <div class="vcard-title">Motorcycle</div>
+              <div class="vcard-sub">28 rute · 88 pelanggan</div>
+            </div>
+          </div>
+          <div class="vcard-grid">
+            <div><span>Total Jarak</span><b>3530.5 km</b></div>
+            <div><span>Total Emisi</span><b>392.4 kgCO2</b></div>
+            <div><span>Total Waiting</span><b>19 mnt</b></div>
+            <div><span>Avg Utilisasi</span><b>84%</b></div>
+          </div>
+          <button class="btn-filter" onclick="filterVehicle('motorcycle')">
+            <i class="fa-solid fa-filter"></i> Filter rute ini
+          </button>
+        </div>
+
+        <div class="vcard" style="border-top:3px solid #FB5607">
+          <div class="vcard-head">
+            <div class="vcard-icon" style="background:#FB560720;color:#FB5607">
+              <i class="fa-solid fa-van-shuttle"></i>
+            </div>
+            <div>
+              <div class="vcard-title">Van</div>
+              <div class="vcard-sub">3 rute · 12 pelanggan</div>
+            </div>
+          </div>
+          <div class="vcard-grid">
+            <div><span>Total Jarak</span><b>583.2 km</b></div>
+            <div><span>Total Emisi</span><b>188.3 kgCO2</b></div>
+            <div><span>Total Waiting</span><b>0 mnt</b></div>
+            <div><span>Avg Utilisasi</span><b>70%</b></div>
+          </div>
+          <button class="btn-filter" onclick="filterVehicle('van')">
+            <i class="fa-solid fa-filter"></i> Filter rute ini
+          </button>
+        </div>
+    </div>
+    
+    <!-- Analytics -->
+    <div class="tab-panel" id="panel-analytics">
+      
+    <div style="background:var(--bg4);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px">
+        ▶ Animasi Per Rute
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="single-route-sel" style="flex:1;background:var(--bg3);border:1px solid var(--border);
+          color:var(--text);border-radius:10px;padding:6px 9px;font-size:11px">
+          <option value="1">R1 — Motorcycle (561→780 mnt)</option><option value="2">R2 — Motorcycle (855→1040 mnt)</option><option value="3">R3 — Van (406→730 mnt)</option><option value="4">R4 — Motorcycle (642→933 mnt)</option><option value="5">R5 — Motorcycle (212→473 mnt)</option><option value="6">R6 — Motorcycle (599→839 mnt)</option><option value="7">R7 — Motorcycle (666→926 mnt)</option><option value="8">R8 — Motorcycle (634→893 mnt)</option><option value="9">R9 — Motorcycle (506→796 mnt)</option><option value="10">R10 — Motorcycle (229→509 mnt)</option><option value="11">R11 — Motorcycle (177→433 mnt)</option><option value="12">R12 — Motorcycle (439→662 mnt)</option><option value="13">R13 — Motorcycle (381→614 mnt)</option><option value="14">R14 — Motorcycle (288→546 mnt)</option><option value="15">R15 — Motorcycle (282→560 mnt)</option><option value="16">R16 — Motorcycle (237→521 mnt)</option><option value="17">R17 — Motorcycle (457→744 mnt)</option><option value="18">R18 — Motorcycle (188→483 mnt)</option><option value="19">R19 — Motorcycle (473→753 mnt)</option><option value="20">R20 — Motorcycle (234→486 mnt)</option><option value="21">R21 — Motorcycle (676→839 mnt)</option><option value="22">R22 — Motorcycle (202→501 mnt)</option><option value="23">R23 — Motorcycle (125→419 mnt)</option><option value="24">R24 — Motorcycle (116→348 mnt)</option><option value="25">R25 — Van (166→555 mnt)</option><option value="26">R26 — Motorcycle (237→524 mnt)</option><option value="27">R27 — Van (313→717 mnt)</option><option value="28">R28 — Motorcycle (411→630 mnt)</option><option value="29">R29 — Motorcycle (307→607 mnt)</option><option value="30">R30 — Motorcycle (412→665 mnt)</option><option value="31">R31 — Motorcycle (603→774 mnt)</option>
+        </select>
+        <button onclick="startRouteSim(document.getElementById('single-route-sel').value)"
+          style="background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;
+          border-radius:10px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">▶ Jalankan</button>
+      </div>
+      <div id="single-sim-status" style="font-size:10px;color:var(--muted);margin-top:6px">Pilih rute dan tekan ▶</div>
+    </div>
+    
+      <div class="chart-wrap">
+        <div class="chart-title"><i class="fa-solid fa-chart-bar"></i> Emisi per Rute (kgCO₂)</div>
+        <div class="chart-canvas-wrap"><canvas id="chartEmisi"></canvas></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title"><i class="fa-solid fa-chart-pie"></i> Komposisi Armada</div>
+        <div class="chart-canvas-wrap"><canvas id="chartArmada"></canvas></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title"><i class="fa-solid fa-clock"></i> Waiting Time per Rute (menit)</div>
+        <div class="chart-canvas-wrap"><canvas id="chartWait"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════ MAP ══════════════════════════════════════ -->
+<main id="map"></main>
+
+<!-- Map overlay controls -->
+<div class="map-controls">
+  <button class="map-btn" onclick="setTile('light')" id="tile-light">
+    <i class="fa-solid fa-map"></i> Light
+  </button>
+  <button class="map-btn active" onclick="setTile('dark')" id="tile-dark">
+    <i class="fa-solid fa-moon"></i> Dark
+  </button>
+  <button class="map-btn" onclick="setTile('sat')" id="tile-sat">
+    <i class="fa-solid fa-satellite"></i> Satellite
+  </button>
+</div>
+
+<!-- Floating detail panel -->
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-panel-head">
+    <div class="detail-panel-title" id="dpTitle">–</div>
+    <button class="detail-close" onclick="closeDetail()"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="detail-grid" id="dpGrid"></div>
+  <div class="detail-seq" id="dpSeq"></div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-title">Legenda</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#1e293b;border:2px solid #fff"></div>Depot</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#3A86FF"></div>Motorcycle</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#FB5607"></div>Van</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#8338EC"></div>Truck</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(90deg,#3b82f6,#f59e0b,#ef4444)"></div>Waiting Heat</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════ SCRIPTS ═══════════════════════════════════ -->
+<script>
+const D = {"instance": "RC101", "run_idx": 3, "seed": 102, "feasible": true, "green_cost": 7807.213917631475, "penalized_cost": 12634.785412333906, "K": 31, "tot_dist": 4113.680826023061, "tot_wait": 18.931660484077327, "tot_emission": 580.753014103174, "avg_wait": 0.610698725292817, "on_time": 0.96, "horizon": 1040.3310024793132, "depot": {"lat": -7.571, "lon": 110.829}, "center": {"lat": -7.5592153500000006, "lon": 110.8190218}, "routes": [{"route_id": 1, "label": "R1", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#E63946", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [43, 37, 96], "load": 56.0, "dist": 93.77548422912713, "dur": 218.8807297405914, "dep": 561.3791496654032, "ret": 780.2598794059946, "drive": 85.25044020829738, "svc": 133.63028953229397, "wait": 0.0, "me": 9.377548422912714, "ie": 1.3363028953229397, "emission": 10.713851318235653, "green_cost": 179.34572584109952, "penalized_cost": 329.3457258410995, "geometry": [[-7.571, 110.829], [-7.5232191, 110.82690428421053], [-7.5258529719512195, 110.8374142631579], [-7.550435776829269, 110.82690428421053], [-7.571, 110.829]], "seq": "Depot → C43 → C37 → C96 → Depot"}, {"route_id": 2, "label": "R2", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#457B9D", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [70, 100, 80], "load": 39.0, "dist": 57.34728871498338, "dur": 185.76418836409687, "dep": 854.5668141152163, "ret": 1040.3310024793132, "drive": 52.13389883180307, "svc": 133.63028953229397, "wait": 0.0, "me": 5.734728871498338, "ie": 1.3363028953229397, "emission": 7.071031766821278, "green_cost": 135.63189122412706, "penalized_cost": 285.63189122412706, "geometry": [[-7.571, 110.829], [-7.537266417073171, 110.80588432631579], [-7.539022331707318, 110.80168033473684], [-7.5565814780487806, 110.81849630105263], [-7.571, 110.829]], "seq": "Depot → C70 → C100 → C80 → Depot"}, {"route_id": 3, "label": "R3", "vehicle_type": "van", "vehicle_label": "Van", "vehicle_icon": "fa-van-shuttle", "vehicle_cap": 150.0, "color": "#2A9D8F", "type_color": "#FB5607", "n_customers": 4, "customer_ids": [19, 22, 32, 50], "load": 120.0, "dist": 145.9233015252986, "dur": 324.0970209016907, "dep": 406.1216787603828, "ret": 730.2186996620735, "drive": 145.9233015252986, "svc": 178.17371937639197, "wait": 0.0, "me": 43.77699045758958, "ie": 4.4543429844097995, "emission": 48.231333441999375, "green_cost": 456.1944316609677, "penalized_cost": 656.1944316609836, "geometry": [[-7.571, 110.829], [-7.589065898780488, 110.81324131157895], [-7.584676112195122, 110.81113931578948], [-7.571506752439024, 110.8605362168421], [-7.567116965853659, 110.84477124842105], [-7.571, 110.829]], "seq": "Depot → C19 → C22 → C32 → C50 → Depot"}, {"route_id": 4, "label": "R4", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#E9C46A", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [24, 77, 58, 91], "load": 50.0, "dist": 123.62867950945672, "dur": 290.5634280213525, "dep": 642.4324739140143, "ret": 932.9959019353668, "drive": 112.38970864496063, "svc": 178.17371937639197, "wait": 0.0, "me": 12.362867950945672, "ie": 1.7817371937639197, "emission": 14.144605144709592, "green_cost": 237.44127509954404, "penalized_cost": 387.44127509954404, "geometry": [[-7.571, 110.829], [-7.584676112195122, 110.80903732], [-7.5952116, 110.79327235157895], [-7.589065898780488, 110.78486436842105], [-7.560971264634146, 110.8205982968421], [-7.571, 110.829]], "seq": "Depot → C24 → C77 → C58 → C91 → Depot"}, {"route_id": 5, "label": "R5", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#F4A261", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [69, 63, 18], "load": 53.0, "dist": 126.89441837044185, "dur": 261.1627084705851, "dep": 211.9789501010801, "ret": 473.1416585716652, "drive": 115.35856215494712, "svc": 133.63028953229397, "wait": 12.173856783343979, "me": 12.689441837044185, "ie": 1.4580414631563796, "emission": 14.147483300200566, "green_cost": 225.1753752023492, "penalized_cost": 387.34923198569317, "geometry": [[-7.571, 110.829], [-7.552191691463415, 110.80168033473684], [-7.580286325609756, 110.8374142631579], [-7.5934556853658535, 110.81534330736842], [-7.571, 110.829]], "seq": "Depot → C69 → C63 → C18 → Depot"}, {"route_id": 6, "label": "R6", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#264653", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [13, 17, 74], "load": 38.0, "dist": 117.33033935862262, "dur": 240.294234403769, "dep": 598.719584642259, "ret": 839.013819046028, "drive": 106.66394487147511, "svc": 133.63028953229397, "wait": 0.0, "me": 11.733033935862263, "ie": 1.3363028953229397, "emission": 13.069336831185202, "green_cost": 207.61155199649414, "penalized_cost": 357.61155199649414, "geometry": [[-7.571, 110.829], [-7.567116965853659, 110.77435438947369], [-7.558337392682927, 110.7690994], [-7.580286325609756, 110.79011935789474], [-7.571, 110.829]], "seq": "Depot → C13 → C17 → C74 → Depot"}, {"route_id": 7, "label": "R7", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#A8DADC", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [68, 89, 93], "load": 49.0, "dist": 139.7463487998191, "dur": 260.67242480485675, "dep": 665.7214360539693, "ret": 926.3938608588261, "drive": 127.0421352725628, "svc": 133.63028953229397, "wait": 0.0, "me": 13.97463487998191, "ie": 1.3363028953229397, "emission": 15.310937775304849, "green_cost": 234.51076332592987, "penalized_cost": 384.5107633259299, "geometry": [[-7.571, 110.829], [-7.54516803292683, 110.81113931578948], [-7.5934556853658535, 110.83951625894737], [-7.552191691463415, 110.83321027157895], [-7.571, 110.829]], "seq": "Depot → C68 → C89 → C93 → Depot"}, {"route_id": 8, "label": "R8", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#8338EC", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [48, 25, 60], "load": 47.0, "dist": 137.4937461074915, "dur": 258.6246041754681, "dep": 634.4502996350543, "ret": 893.0749038105224, "drive": 124.99431464317406, "svc": 133.63028953229397, "wait": 0.0, "me": 13.74937461074915, "ie": 1.3363028953229397, "emission": 15.08567750607209, "green_cost": 231.80764009513678, "penalized_cost": 381.80764009515264, "geometry": [[-7.571, 110.829], [-7.5934556853658535, 110.81324131157895], [-7.5934556853658535, 110.80588432631579], [-7.54516803292683, 110.78486436842105], [-7.571, 110.829]], "seq": "Depot → C48 → C25 → C60 → Depot"}, {"route_id": 9, "label": "R9", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#FB5607", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [81, 26, 35], "load": 60.0, "dist": 171.81441135757592, "dur": 289.825208948272, "dep": 505.75688202899835, "ret": 795.5820909772704, "drive": 156.1949194159781, "svc": 133.63028953229397, "wait": 0.0, "me": 17.18144113575759, "ie": 1.3363028953229397, "emission": 18.517744031080532, "green_cost": 272.9924383952381, "penalized_cost": 422.9924383952381, "geometry": [[-7.571, 110.829], [-7.546923947560976, 110.8205982968421], [-7.571506752439024, 110.8689442], [-7.5232191, 110.83951625894737], [-7.571, 110.829]], "seq": "Depot → C81 → C26 → C35 → Depot"}, {"route_id": 10, "label": "R10", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#3A86FF", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [28, 21, 23], "load": 50.0, "dist": 160.45546257396393, "dur": 279.4988918722612, "dep": 229.15659650733215, "ret": 508.65548837959335, "drive": 145.8686023399672, "svc": 133.63028953229397, "wait": 0.0, "me": 16.045546257396392, "ie": 1.3363028953229397, "emission": 17.381849152719333, "green_cost": 259.3616998549037, "penalized_cost": 409.3616998549037, "geometry": [[-7.571, 110.829], [-7.571506752439024, 110.86579120631579], [-7.5934556853658535, 110.81113931578948], [-7.5934556853658535, 110.80903732], [-7.571, 110.829]], "seq": "Depot → C28 → C21 → C23 → Depot"}, {"route_id": 11, "label": "R11", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#06D6A0", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [36, 62, 64], "load": 60.0, "dist": 134.24268259138975, "dur": 255.6690918881028, "dep": 177.32619486936147, "ret": 432.99528675746427, "drive": 122.03880235580885, "svc": 133.63028953229397, "wait": 0.0, "me": 13.424268259138977, "ie": 1.3363028953229397, "emission": 14.760571154461916, "green_cost": 227.9063638758147, "penalized_cost": 377.9063638758147, "geometry": [[-7.571, 110.829], [-7.5232191, 110.8374142631579], [-7.567116965853659, 110.8374142631579], [-7.571506752439024, 110.81639430526316], [-7.571, 110.829]], "seq": "Depot → C36 → C62 → C64 → Depot"}, {"route_id": 12, "label": "R12", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#FFB703", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [7, 53, 66], "load": 41.0, "dist": 98.58701950815353, "dur": 223.25485272152446, "dep": 439.1134925174048, "ret": 662.3683452389292, "drive": 89.62456318923047, "svc": 133.63028953229397, "wait": 0.0, "me": 9.858701950815353, "ie": 1.3363028953229397, "emission": 11.195004846138293, "green_cost": 185.11956817593122, "penalized_cost": 343.7594023942336, "geometry": [[-7.571, 110.829], [-7.531998673170732, 110.78486436842105], [-7.553947606097561, 110.79011935789474], [-7.565361051219512, 110.81219031368421], [-7.571, 110.829]], "seq": "Depot → C7 → C53 → C66 → Depot"}, {"route_id": 13, "label": "R13", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#CB4335", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [78, 87, 9], "load": 60.0, "dist": 109.52803173538939, "dur": 233.20122747355703, "dep": 380.809539540942, "ret": 614.010767014499, "drive": 99.57093794126308, "svc": 133.63028953229397, "wait": 0.0, "me": 10.952803173538939, "ie": 1.3363028953229397, "emission": 12.289106068861878, "green_cost": 198.24878284861427, "penalized_cost": 348.24878284861427, "geometry": [[-7.571, 110.829], [-7.548679862195122, 110.7775073831579], [-7.576774496341463, 110.78171137473684], [-7.567116965853659, 110.77960937894737], [-7.571, 110.829]], "seq": "Depot → C78 → C87 → C9 → Depot"}, {"route_id": 14, "label": "R14", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#1B4F72", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [12, 44, 38], "load": 60.0, "dist": 136.6869155611131, "dur": 257.8911218605785, "dep": 288.1784581424361, "ret": 546.0695800030146, "drive": 124.26083232828461, "svc": 133.63028953229397, "wait": 0.0, "me": 13.66869155611131, "ie": 1.3363028953229397, "emission": 15.00499445143425, "green_cost": 230.8394434394827, "penalized_cost": 380.8394434394827, "geometry": [[-7.571, 110.829], [-7.558337392682927, 110.7775073831579], [-7.5258529719512195, 110.82690428421053], [-7.527608886585366, 110.83426126947369], [-7.571, 110.829]], "seq": "Depot → C12 → C44 → C38 → Depot"}, {"route_id": 15, "label": "R15", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#7D3C98", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [47, 99, 75], "load": 41.0, "dist": 157.9559738956316, "dur": 277.2266294374136, "dep": 282.394626471628, "ret": 559.6212559090416, "drive": 143.59633990511963, "svc": 133.63028953229397, "wait": 0.0, "me": 15.79559738956316, "ie": 1.3363028953229397, "emission": 17.1319002848861, "green_cost": 256.36231344090487, "penalized_cost": 406.36231344090487, "geometry": [[-7.571, 110.829], [-7.558337392682927, 110.77120139578948], [-7.567116965853659, 110.79642534526316], [-7.5934556853658535, 110.77435438947369], [-7.571, 110.829]], "seq": "Depot → C47 → C99 → C75 → Depot"}, {"route_id": 16, "label": "R16", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#2ECC71", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [52, 59, 40], "load": 52.0, "dist": 165.34514245309632, "dur": 283.94405539874515, "dep": 237.0531228722076, "ret": 520.9971782709528, "drive": 150.31376586645118, "svc": 133.63028953229397, "wait": 0.0, "me": 16.534514245309634, "ie": 1.3363028953229397, "emission": 17.870817140632575, "green_cost": 265.2293157098626, "penalized_cost": 415.2293157098626, "geometry": [[-7.571, 110.829], [-7.571506752439024, 110.79537434736842], [-7.580286325609756, 110.77960937894737], [-7.5232191, 110.83215927368421], [-7.571, 110.829]], "seq": "Depot → C52 → C59 → C40 → Depot"}, {"route_id": 17, "label": "R17", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#E74C3C", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [85, 94, 54, 55], "load": 57.0, "dist": 112.48587665062867, "dur": 287.19141094133323, "dep": 456.6328832377621, "ret": 743.8242941790953, "drive": 102.25988786420787, "svc": 178.17371937639197, "wait": 6.757803700733348, "me": 11.248587665062868, "ie": 1.8493152307712533, "emission": 13.097902895834121, "green_cost": 227.44881351931707, "penalized_cost": 384.2066172200504, "geometry": [[-7.571, 110.829], [-7.577652453658536, 110.83531226736842], [-7.555703520731708, 110.82900628], [-7.54516803292683, 110.82690428421053], [-7.54516803292683, 110.8006293368421], [-7.571, 110.829]], "seq": "Depot → C85 → C94 → C54 → C55 → Depot"}, {"route_id": 18, "label": "R18", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#3498DB", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [83, 45, 51], "load": 43.0, "dist": 177.7320339923409, "dur": 295.2048658889675, "dep": 187.53927348905512, "ret": 482.7441393780226, "drive": 161.57457635667353, "svc": 133.63028953229397, "wait": 0.0, "me": 17.773203399234088, "ie": 1.3363028953229397, "emission": 19.10950629455703, "green_cost": 280.09358555695604, "penalized_cost": 430.09358555695604, "geometry": [[-7.571, 110.829], [-7.5706287951219515, 110.80798632210526], [-7.5258529719512195, 110.79011935789474], [-7.580286325609756, 110.82690428421053], [-7.571, 110.829]], "seq": "Depot → C83 → C45 → C51 → Depot"}, {"route_id": 19, "label": "R19", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#F39C12", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [41, 34, 20], "load": 60.0, "dist": 161.54627674098705, "dur": 280.4905411150094, "dep": 472.9831098920292, "ret": 753.4736510070386, "drive": 146.86025158271548, "svc": 133.63028953229397, "wait": 0.0, "me": 16.154627674098705, "ie": 1.3363028953229397, "emission": 17.490930569421646, "green_cost": 260.67067685533146, "penalized_cost": 410.67067685533146, "geometry": [[-7.571, 110.829], [-7.531998673170732, 110.83005727789474], [-7.567116965853659, 110.85843422105263], [-7.584676112195122, 110.81324131157895], [-7.571, 110.829]], "seq": "Depot → C41 → C34 → C20 → Depot"}, {"route_id": 20, "label": "R20", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#16A085", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [15, 98, 71], "load": 43.0, "dist": 130.73689313795427, "dur": 252.4820105667979, "dep": 233.87156320852455, "ret": 486.35357377532245, "drive": 118.85172103450388, "svc": 133.63028953229397, "wait": 0.0, "me": 13.073689313795427, "ie": 1.3363028953229397, "emission": 14.409992209118366, "green_cost": 223.69941653169212, "penalized_cost": 373.6994165317001, "geometry": [[-7.571, 110.829], [-7.562727179268292, 110.77120139578948], [-7.552191691463415, 110.79642534526316], [-7.549557819512195, 110.8374142631579], [-7.571, 110.829]], "seq": "Depot → C15 → C98 → C71 → Depot"}, {"route_id": 21, "label": "R21", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#E63946", "type_color": "#3A86FF", "n_customers": 2, "customer_ids": [1, 4], "load": 60.0, "dist": 81.20544609582491, "dur": 162.9099925025822, "dep": 676.1038265434458, "ret": 839.0138190460281, "drive": 73.82313281438627, "svc": 89.08685968819599, "wait": 0.0, "me": 8.120544609582492, "ie": 0.8908685968819599, "emission": 9.011413206464452, "green_cost": 141.9899651590879, "penalized_cost": 291.9899651590879, "geometry": [[-7.571, 110.829], [-7.5232191, 110.79537434736842], [-7.527608886585366, 110.79011935789474], [-7.571, 110.829]], "seq": "Depot → C1 → C4 → Depot"}, {"route_id": 22, "label": "R22", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#457B9D", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [39, 5, 61, 90], "load": 45.0, "dist": 132.32277897400837, "dur": 298.4671548073087, "dep": 202.29055705251358, "ret": 500.7577118598223, "drive": 120.29343543091669, "svc": 178.17371937639197, "wait": 0.0, "me": 13.232277897400838, "ie": 1.7817371937639197, "emission": 15.014015091164758, "green_cost": 247.874194457006, "penalized_cost": 397.874194457006, "geometry": [[-7.571, 110.829], [-7.527608886585366, 110.83215927368421], [-7.5232191, 110.79011935789474], [-7.540778246341464, 110.81639430526316], [-7.5565814780487806, 110.80798632210526], [-7.571, 110.829]], "seq": "Depot → C39 → C5 → C61 → C90 → Depot"}, {"route_id": 23, "label": "R23", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#2A9D8F", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [65, 92, 31, 33], "load": 60.0, "dist": 127.24973083427165, "dur": 293.8552928620935, "dep": 124.69436376230261, "ret": 418.5496566243961, "drive": 115.68157348570148, "svc": 178.17371937639197, "wait": 0.0, "me": 12.724973083427166, "ie": 1.7817371937639197, "emission": 14.506710277191086, "green_cost": 241.78653668932196, "penalized_cost": 391.78653668932196, "geometry": [[-7.571, 110.829], [-7.562727179268292, 110.80588432631579], [-7.560093307317073, 110.82480228842105], [-7.567116965853659, 110.86158721473684], [-7.575896539024391, 110.85843422105263], [-7.571, 110.829]], "seq": "Depot → C65 → C92 → C31 → C33 → Depot"}, {"route_id": 24, "label": "R24", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#E9C46A", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [72, 42, 95], "load": 24.0, "dist": 108.0862148987934, "dur": 231.8904848948335, "dep": 116.47228515884473, "ret": 348.3627700536782, "drive": 98.26019536253946, "svc": 133.63028953229397, "wait": 0.0, "me": 10.808621489879341, "ie": 1.3363028953229397, "emission": 12.14492438520228, "green_cost": 196.51860264469906, "penalized_cost": 346.518602644707, "geometry": [[-7.571, 110.829], [-7.540778246341464, 110.83531226736842], [-7.527608886585366, 110.82690428421053], [-7.565361051219512, 110.82795528210526], [-7.571, 110.829]], "seq": "Depot → C72 → C42 → C95 → Depot"}, {"route_id": 25, "label": "R25", "vehicle_type": "van", "vehicle_label": "Van", "vehicle_icon": "fa-van-shuttle", "vehicle_cap": 150.0, "color": "#F4A261", "type_color": "#FB5607", "n_customers": 4, "customer_ids": [14, 27, 30, 76], "load": 71.0, "dist": 210.73997076909842, "dur": 388.91369014549036, "dep": 166.27757416880434, "ret": 555.1912643142947, "drive": 210.73997076909842, "svc": 178.17371937639197, "wait": 0.0, "me": 63.22199123072952, "ie": 4.4543429844097995, "emission": 67.67633421513932, "green_cost": 559.9011024510474, "penalized_cost": 759.9011024510474, "geometry": [[-7.571, 110.829], [-7.558337392682927, 110.77435438947369], [-7.567116965853659, 110.8689442], [-7.571506752439024, 110.86158721473684], [-7.587309984146342, 110.83215927368421], [-7.571, 110.829]], "seq": "Depot → C14 → C27 → C30 → C76 → Depot"}, {"route_id": 26, "label": "R26", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#264653", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [11, 67, 29], "load": 59.0, "dist": 168.68916871319328, "dur": 286.9840792715605, "dep": 237.08655873715406, "ret": 524.0706380087146, "drive": 153.35378973926663, "svc": 133.63028953229397, "wait": 0.0, "me": 16.86891687131933, "ie": 1.3363028953229397, "emission": 18.20521976664227, "green_cost": 269.24214722197894, "penalized_cost": 419.24214722197894, "geometry": [[-7.571, 110.829], [-7.562727179268292, 110.7775073831579], [-7.560971264634146, 110.83636326526316], [-7.567116965853659, 110.86368921052632], [-7.571, 110.829]], "seq": "Depot → C11 → C67 → C29 → Depot"}, {"route_id": 27, "label": "R27", "vehicle_type": "van", "vehicle_label": "Van", "vehicle_icon": "fa-van-shuttle", "vehicle_cap": 150.0, "color": "#A8DADC", "type_color": "#FB5607", "n_customers": 4, "customer_ids": [2, 86, 79, 97], "load": 123.0, "dist": 226.50856610556036, "dur": 404.68228548195225, "dep": 312.67775167896616, "ret": 717.3600371609184, "drive": 226.50856610556036, "svc": 178.17371937639197, "wait": 0.0, "me": 67.9525698316681, "ie": 4.4543429844097995, "emission": 72.4069128160779, "green_cost": 585.1308549893865, "penalized_cost": 785.1308549893865, "geometry": [[-7.571, 110.829], [-7.531998673170732, 110.79222135368421], [-7.576774496341463, 110.79117035578948], [-7.538144374390244, 110.77540538736842], [-7.5820422402439025, 110.77330339157895], [-7.571, 110.829]], "seq": "Depot → C2 → C86 → C79 → C97 → Depot"}, {"route_id": 28, "label": "R28", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#8338EC", "type_color": "#3A86FF", "n_customers": 3, "customer_ids": [84, 49, 57], "load": 51.0, "dist": 94.30771031834851, "dur": 219.36457163988348, "dep": 410.9040960904606, "ret": 630.2686677303441, "drive": 85.73428210758955, "svc": 133.63028953229397, "wait": 0.0, "me": 9.430771031834851, "ie": 1.3363028953229397, "emission": 10.76707392715779, "green_cost": 179.98439714816521, "penalized_cost": 329.9843971481652, "geometry": [[-7.571, 110.829], [-7.572384709756098, 110.82900628], [-7.587309984146342, 110.81324131157895], [-7.575896539024391, 110.8006293368421], [-7.571, 110.829]], "seq": "Depot → C84 → C49 → C57 → Depot"}, {"route_id": 29, "label": "R29", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#FB5607", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [82, 16, 73, 3], "load": 44.0, "dist": 133.40368821236052, "dur": 299.449799569447, "dep": 307.29012845911154, "ret": 606.7399280285586, "drive": 121.27608019305501, "svc": 178.17371937639197, "wait": 0.0, "me": 13.340368821236053, "ie": 1.7817371937639197, "emission": 15.122106014999973, "green_cost": 249.1712855430286, "penalized_cost": 399.1712855430286, "geometry": [[-7.571, 110.829], [-7.560093307317073, 110.7974763431579], [-7.562727179268292, 110.7690994], [-7.54516803292683, 110.77120139578948], [-7.5232191, 110.79222135368421], [-7.571, 110.829]], "seq": "Depot → C82 → C16 → C73 → C3 → Depot"}, {"route_id": 30, "label": "R30", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#3A86FF", "type_color": "#3A86FF", "n_customers": 4, "customer_ids": [88, 6, 8, 46], "load": 59.0, "dist": 81.9494025676401, "dur": 252.67317625606478, "dep": 411.93659406887747, "ret": 664.6097703249422, "drive": 74.49945687967283, "svc": 178.17371937639197, "wait": 0.0, "me": 8.194940256764012, "ie": 1.7817371937639197, "emission": 9.976677450527932, "green_cost": 187.4261427693641, "penalized_cost": 337.4261427693641, "geometry": [[-7.571, 110.829], [-7.546923947560976, 110.79432334947369], [-7.531998673170732, 110.78801736210526], [-7.527608886585366, 110.78486436842105], [-7.527608886585366, 110.78801736210526], [-7.571, 110.829]], "seq": "Depot → C88 → C6 → C8 → C46 → Depot"}, {"route_id": 31, "label": "R31", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "vehicle_icon": "fa-motorcycle", "vehicle_cap": 60.0, "color": "#06D6A0", "type_color": "#3A86FF", "n_customers": 2, "customer_ids": [10, 56], "load": 49.0, "dist": 89.96182172049649, "dur": 170.87033397955645, "dep": 602.7568428040366, "ret": 773.6271767835931, "drive": 81.78347429136043, "svc": 89.08685968819599, "wait": 0.0, "me": 8.996182172049648, "ie": 0.8908685968819599, "emission": 9.887050768931609, "green_cost": 152.49761590869377, "penalized_cost": 302.4976159086938, "geometry": [[-7.571, 110.829], [-7.562727179268292, 110.77960937894737], [-7.567116965853659, 110.82164929473684], [-7.571, 110.829]], "seq": "Depot → C10 → C56 → Depot"}], "customers": [{"id": 1, "lat": -7.5232191, "lon": 110.79537434736842, "demand": 20.0, "tw_start": 645.8797327394209, "tw_end": 779.5100222717149, "service": 44.54342984409799, "route_id": 21, "route_label": "R21", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 676.1038265434458, "ret": 839.0138190460281}, {"id": 2, "lat": -7.531998673170732, "lon": 110.79222135368421, "demand": 30.0, "tw_start": 222.71714922048997, "tw_end": 356.34743875278394, "service": 44.54342984409799, "route_id": 27, "route_label": "R27", "vehicle_type": "van", "vehicle_label": "Van", "dep": 312.67775167896616, "ret": 717.3600371609184}, {"id": 3, "lat": -7.5232191, "lon": 110.79222135368421, "demand": 10.0, "tw_start": 485.52338530066817, "tw_end": 619.1536748329621, "service": 44.54342984409799, "route_id": 29, "route_label": "R29", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 307.29012845911154, "ret": 606.7399280285586}, {"id": 4, "lat": -7.527608886585366, "lon": 110.79011935789474, "demand": 40.0, "tw_start": 628.0623608017818, "tw_end": 761.6926503340757, "service": 44.54342984409799, "route_id": 21, "route_label": "R21", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 676.1038265434458, "ret": 839.0138190460281}, {"id": 5, "lat": -7.5232191, "lon": 110.79011935789474, "demand": 20.0, "tw_start": 182.62806236080178, "tw_end": 316.2583518930958, "service": 44.54342984409799, "route_id": 22, "route_label": "R22", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 202.29055705251358, "ret": 500.7577118598223}, {"id": 6, "lat": -7.531998673170732, "lon": 110.78801736210526, "demand": 20.0, "tw_start": 423.16258351893094, "tw_end": 556.7928730512249, "service": 44.54342984409799, "route_id": 30, "route_label": "R30", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 411.93659406887747, "ret": 664.6097703249422}, {"id": 7, "lat": -7.531998673170732, "lon": 110.78486436842105, "demand": 20.0, "tw_start": 351.89309576837417, "tw_end": 485.52338530066817, "service": 44.54342984409799, "route_id": 12, "route_label": "R12", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 439.1134925174048, "ret": 662.3683452389292}, {"id": 8, "lat": -7.527608886585366, "lon": 110.78486436842105, "demand": 10.0, "tw_start": 405.3452115812918, "tw_end": 538.9755011135858, "service": 44.54342984409799, "route_id": 30, "route_label": "R30", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 411.93659406887747, "ret": 664.6097703249422}, {"id": 9, "lat": -7.567116965853659, "lon": 110.77960937894737, "demand": 20.0, "tw_start": 405.3452115812918, "tw_end": 538.9755011135858, "service": 44.54342984409799, "route_id": 13, "route_label": "R13", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 380.809539540942, "ret": 614.010767014499}, {"id": 10, "lat": -7.562727179268292, "lon": 110.77960937894737, "demand": 30.0, "tw_start": 530.0668151447661, "tw_end": 663.6971046770601, "service": 44.54342984409799, "route_id": 31, "route_label": "R31", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 602.7568428040366, "ret": 773.6271767835931}, {"id": 11, "lat": -7.562727179268292, "lon": 110.7775073831579, "demand": 40.0, "tw_start": 262.80623608017817, "tw_end": 396.43652561247217, "service": 44.54342984409799, "route_id": 26, "route_label": "R26", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.08655873715406, "ret": 524.0706380087146}, {"id": 12, "lat": -7.558337392682927, "lon": 110.7775073831579, "demand": 20.0, "tw_start": 285.07795100222717, "tw_end": 418.70824053452117, "service": 44.54342984409799, "route_id": 14, "route_label": "R14", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 288.1784581424361, "ret": 546.0695800030146}, {"id": 13, "lat": -7.567116965853659, "lon": 110.77435438947369, "demand": 10.0, "tw_start": 632.5167037861916, "tw_end": 766.1469933184856, "service": 44.54342984409799, "route_id": 6, "route_label": "R6", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 598.719584642259, "ret": 839.013819046028}, {"id": 14, "lat": -7.558337392682927, "lon": 110.77435438947369, "demand": 10.0, "tw_start": 155.90200445434297, "tw_end": 289.53229398663694, "service": 44.54342984409799, "route_id": 25, "route_label": "R25", "vehicle_type": "van", "vehicle_label": "Van", "dep": 166.27757416880434, "ret": 555.1912643142947}, {"id": 15, "lat": -7.562727179268292, "lon": 110.77120139578948, "demand": 20.0, "tw_start": 258.3518930957684, "tw_end": 391.98218262806233, "service": 44.54342984409799, "route_id": 20, "route_label": "R20", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 233.87156320852455, "ret": 486.35357377532245}, {"id": 16, "lat": -7.562727179268292, "lon": 110.7690994, "demand": 20.0, "tw_start": 320.71269487750556, "tw_end": 454.34298440979956, "service": 44.54342984409799, "route_id": 29, "route_label": "R29", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 307.29012845911154, "ret": 606.7399280285586}, {"id": 17, "lat": -7.558337392682927, "lon": 110.7690994, "demand": 20.0, "tw_start": 663.6971046770601, "tw_end": 797.3273942093541, "service": 44.54342984409799, "route_id": 6, "route_label": "R6", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 598.719584642259, "ret": 839.013819046028}, {"id": 18, "lat": -7.5934556853658535, "lon": 110.81534330736842, "demand": 20.0, "tw_start": 387.52783964365256, "tw_end": 521.1581291759466, "service": 44.54342984409799, "route_id": 5, "route_label": "R5", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 211.9789501010801, "ret": 473.1416585716652}, {"id": 19, "lat": -7.589065898780488, "lon": 110.81324131157895, "demand": 40.0, "tw_start": 320.71269487750556, "tw_end": 454.34298440979956, "service": 44.54342984409799, "route_id": 3, "route_label": "R3", "vehicle_type": "van", "vehicle_label": "Van", "dep": 406.1216787603828, "ret": 730.2186996620735}, {"id": 20, "lat": -7.584676112195122, "lon": 110.81324131157895, "demand": 10.0, "tw_start": 543.4298440979956, "tw_end": 677.0601336302896, "service": 44.54342984409799, "route_id": 19, "route_label": "R19", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 472.9831098920292, "ret": 753.4736510070386}, {"id": 21, "lat": -7.5934556853658535, "lon": 110.81113931578948, "demand": 10.0, "tw_start": 298.44097995545656, "tw_end": 432.07126948775056, "service": 44.54342984409799, "route_id": 10, "route_label": "R10", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 229.15659650733215, "ret": 508.65548837959335}, {"id": 22, "lat": -7.584676112195122, "lon": 110.81113931578948, "demand": 40.0, "tw_start": 409.79955456570156, "tw_end": 543.4298440979956, "service": 44.54342984409799, "route_id": 3, "route_label": "R3", "vehicle_type": "van", "vehicle_label": "Van", "dep": 406.1216787603828, "ret": 730.2186996620735}, {"id": 23, "lat": -7.5934556853658535, "lon": 110.80903732, "demand": 30.0, "tw_start": 289.53229398663694, "tw_end": 423.16258351893094, "service": 44.54342984409799, "route_id": 10, "route_label": "R10", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 229.15659650733215, "ret": 508.65548837959335}, {"id": 24, "lat": -7.584676112195122, "lon": 110.80903732, "demand": 10.0, "tw_start": 659.2427616926503, "tw_end": 792.8730512249443, "service": 44.54342984409799, "route_id": 4, "route_label": "R4", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 642.4324739140143, "ret": 932.9959019353668}, {"id": 25, "lat": -7.5934556853658535, "lon": 110.80588432631579, "demand": 20.0, "tw_start": 685.9688195991091, "tw_end": 819.5991091314031, "service": 44.54342984409799, "route_id": 8, "route_label": "R8", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 634.4502996350543, "ret": 893.0749038105224}, {"id": 26, "lat": -7.571506752439024, "lon": 110.8689442, "demand": 30.0, "tw_start": 512.2494432071269, "tw_end": 645.8797327394209, "service": 44.54342984409799, "route_id": 9, "route_label": "R9", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 505.75688202899835, "ret": 795.5820909772704}, {"id": 27, "lat": -7.567116965853659, "lon": 110.8689442, "demand": 20.0, "tw_start": 276.16926503340756, "tw_end": 409.79955456570156, "service": 44.54342984409799, "route_id": 25, "route_label": "R25", "vehicle_type": "van", "vehicle_label": "Van", "dep": 166.27757416880434, "ret": 555.1912643142947}, {"id": 28, "lat": -7.571506752439024, "lon": 110.86579120631579, "demand": 10.0, "tw_start": 276.16926503340756, "tw_end": 409.79955456570156, "service": 44.54342984409799, "route_id": 10, "route_label": "R10", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 229.15659650733215, "ret": 508.65548837959335}, {"id": 29, "lat": -7.567116965853659, "lon": 110.86368921052632, "demand": 10.0, "tw_start": 298.44097995545656, "tw_end": 432.07126948775056, "service": 44.54342984409799, "route_id": 26, "route_label": "R26", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.08655873715406, "ret": 524.0706380087146}, {"id": 30, "lat": -7.571506752439024, "lon": 110.86158721473684, "demand": 10.0, "tw_start": 329.62138084632517, "tw_end": 463.25167037861917, "service": 44.54342984409799, "route_id": 25, "route_label": "R25", "vehicle_type": "van", "vehicle_label": "Van", "dep": 166.27757416880434, "ret": 555.1912643142947}, {"id": 31, "lat": -7.567116965853659, "lon": 110.86158721473684, "demand": 20.0, "tw_start": 271.7149220489978, "tw_end": 405.3452115812918, "service": 44.54342984409799, "route_id": 23, "route_label": "R23", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 124.69436376230261, "ret": 418.5496566243961}, {"id": 32, "lat": -7.571506752439024, "lon": 110.8605362168421, "demand": 10.0, "tw_start": 583.5189309576838, "tw_end": 717.1492204899777, "service": 44.54342984409799, "route_id": 3, "route_label": "R3", "vehicle_type": "van", "vehicle_label": "Van", "dep": 406.1216787603828, "ret": 730.2186996620735}, {"id": 33, "lat": -7.575896539024391, "lon": 110.85843422105263, "demand": 10.0, "tw_start": 227.17149220489978, "tw_end": 360.8017817371938, "service": 44.54342984409799, "route_id": 23, "route_label": "R23", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 124.69436376230261, "ret": 418.5496566243961}, {"id": 34, "lat": -7.567116965853659, "lon": 110.85843422105263, "demand": 30.0, "tw_start": 494.4320712694877, "tw_end": 628.0623608017818, "service": 44.54342984409799, "route_id": 19, "route_label": "R19", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 472.9831098920292, "ret": 753.4736510070386}, {"id": 35, "lat": -7.5232191, "lon": 110.83951625894737, "demand": 20.0, "tw_start": 619.1536748329621, "tw_end": 752.7839643652561, "service": 44.54342984409799, "route_id": 9, "route_label": "R9", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 505.75688202899835, "ret": 795.5820909772704}, {"id": 36, "lat": -7.5232191, "lon": 110.8374142631579, "demand": 40.0, "tw_start": 191.5367483296214, "tw_end": 325.1670378619154, "service": 44.54342984409799, "route_id": 11, "route_label": "R11", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 177.32619486936147, "ret": 432.99528675746427}, {"id": 37, "lat": -7.5258529719512195, "lon": 110.8374142631579, "demand": 10.0, "tw_start": 552.3385300668151, "tw_end": 685.9688195991091, "service": 44.54342984409799, "route_id": 1, "route_label": "R1", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 561.3791496654032, "ret": 780.2598794059946}, {"id": 38, "lat": -7.527608886585366, "lon": 110.83426126947369, "demand": 30.0, "tw_start": 334.07572383073494, "tw_end": 467.70601336302894, "service": 44.54342984409799, "route_id": 14, "route_label": "R14", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 288.1784581424361, "ret": 546.0695800030146}, {"id": 39, "lat": -7.527608886585366, "lon": 110.83215927368421, "demand": 10.0, "tw_start": 164.81069042316258, "tw_end": 298.44097995545656, "service": 44.54342984409799, "route_id": 22, "route_label": "R22", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 202.29055705251358, "ret": 500.7577118598223}, {"id": 40, "lat": -7.5232191, "lon": 110.83215927368421, "demand": 30.0, "tw_start": 378.61915367483294, "tw_end": 512.2494432071269, "service": 44.54342984409799, "route_id": 16, "route_label": "R16", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.0531228722076, "ret": 520.9971782709528}, {"id": 41, "lat": -7.531998673170732, "lon": 110.83005727789474, "demand": 20.0, "tw_start": 409.79955456570156, "tw_end": 543.4298440979956, "service": 44.54342984409799, "route_id": 19, "route_label": "R19", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 472.9831098920292, "ret": 753.4736510070386}, {"id": 42, "lat": -7.527608886585366, "lon": 110.82690428421053, "demand": 10.0, "tw_start": 146.9933184855234, "tw_end": 280.6236080178174, "service": 44.54342984409799, "route_id": 24, "route_label": "R24", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 116.47228515884473, "ret": 348.3627700536782}, {"id": 43, "lat": -7.5232191, "lon": 110.82690428421053, "demand": 20.0, "tw_start": 570.1559020044543, "tw_end": 703.7861915367483, "service": 44.54342984409799, "route_id": 1, "route_label": "R1", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 561.3791496654032, "ret": 780.2598794059946}, {"id": 44, "lat": -7.5258529719512195, "lon": 110.82690428421053, "demand": 10.0, "tw_start": 285.07795100222717, "tw_end": 418.70824053452117, "service": 44.54342984409799, "route_id": 14, "route_label": "R14", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 288.1784581424361, "ret": 546.0695800030146}, {"id": 45, "lat": -7.5258529719512195, "lon": 110.79011935789474, "demand": 10.0, "tw_start": 164.81069042316258, "tw_end": 298.44097995545656, "service": 44.54342984409799, "route_id": 18, "route_label": "R18", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 187.53927348905512, "ret": 482.7441393780226}, {"id": 46, "lat": -7.527608886585366, "lon": 110.78801736210526, "demand": 10.0, "tw_start": 503.34075723830733, "tw_end": 636.9710467706013, "service": 44.54342984409799, "route_id": 30, "route_label": "R30", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 411.93659406887747, "ret": 664.6097703249422}, {"id": 47, "lat": -7.558337392682927, "lon": 110.77120139578948, "demand": 10.0, "tw_start": 200.44543429844097, "tw_end": 334.07572383073494, "service": 44.54342984409799, "route_id": 15, "route_label": "R15", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 282.394626471628, "ret": 559.6212559090416}, {"id": 48, "lat": -7.5934556853658535, "lon": 110.81324131157895, "demand": 10.0, "tw_start": 672.6057906458797, "tw_end": 806.2360801781737, "service": 44.54342984409799, "route_id": 8, "route_label": "R8", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 634.4502996350543, "ret": 893.0749038105224}, {"id": 49, "lat": -7.587309984146342, "lon": 110.81324131157895, "demand": 10.0, "tw_start": 463.25167037861917, "tw_end": 596.8819599109131, "service": 44.54342984409799, "route_id": 28, "route_label": "R28", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 410.9040960904606, "ret": 630.2686677303441}, {"id": 50, "lat": -7.567116965853659, "lon": 110.84477124842105, "demand": 30.0, "tw_start": 516.7037861915368, "tw_end": 650.3340757238308, "service": 44.54342984409799, "route_id": 3, "route_label": "R3", "vehicle_type": "van", "vehicle_label": "Van", "dep": 406.1216787603828, "ret": 730.2186996620735}, {"id": 51, "lat": -7.580286325609756, "lon": 110.82690428421053, "demand": 19.0, "tw_start": 369.71046770601333, "tw_end": 503.34075723830733, "service": 44.54342984409799, "route_id": 18, "route_label": "R18", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 187.53927348905512, "ret": 482.7441393780226}, {"id": 52, "lat": -7.571506752439024, "lon": 110.79537434736842, "demand": 3.0, "tw_start": 231.62583518930958, "tw_end": 365.25612472160356, "service": 44.54342984409799, "route_id": 16, "route_label": "R16", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.0531228722076, "ret": 520.9971782709528}, {"id": 53, "lat": -7.553947606097561, "lon": 110.79011935789474, "demand": 5.0, "tw_start": 405.3452115812918, "tw_end": 538.9755011135858, "service": 44.54342984409799, "route_id": 12, "route_label": "R12", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 439.1134925174048, "ret": 662.3683452389292}, {"id": 54, "lat": -7.54516803292683, "lon": 110.82690428421053, "demand": 16.0, "tw_start": 619.1536748329621, "tw_end": 752.7839643652561, "service": 44.54342984409799, "route_id": 17, "route_label": "R17", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 456.6328832377621, "ret": 743.8242941790953}, {"id": 55, "lat": -7.54516803292683, "lon": 110.8006293368421, "demand": 16.0, "tw_start": 623.6080178173719, "tw_end": 757.2383073496659, "service": 44.54342984409799, "route_id": 17, "route_label": "R17", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 456.6328832377621, "ret": 743.8242941790953}, {"id": 56, "lat": -7.567116965853659, "lon": 110.82164929473684, "demand": 19.0, "tw_start": 579.0645879732739, "tw_end": 712.6948775055679, "service": 44.54342984409799, "route_id": 31, "route_label": "R31", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 602.7568428040366, "ret": 773.6271767835931}, {"id": 57, "lat": -7.575896539024391, "lon": 110.8006293368421, "demand": 23.0, "tw_start": 427.6169265033408, "tw_end": 561.2472160356348, "service": 44.54342984409799, "route_id": 28, "route_label": "R28", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 410.9040960904606, "ret": 630.2686677303441}, {"id": 58, "lat": -7.589065898780488, "lon": 110.78486436842105, "demand": 20.0, "tw_start": 677.0601336302896, "tw_end": 810.6904231625836, "service": 44.54342984409799, "route_id": 4, "route_label": "R4", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 642.4324739140143, "ret": 932.9959019353668}, {"id": 59, "lat": -7.580286325609756, "lon": 110.77960937894737, "demand": 19.0, "tw_start": 187.08240534521158, "tw_end": 320.71269487750556, "service": 44.54342984409799, "route_id": 16, "route_label": "R16", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.0531228722076, "ret": 520.9971782709528}, {"id": 60, "lat": -7.54516803292683, "lon": 110.78486436842105, "demand": 17.0, "tw_start": 690.4231625835189, "tw_end": 824.0534521158129, "service": 44.54342984409799, "route_id": 8, "route_label": "R8", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 634.4502996350543, "ret": 893.0749038105224}, {"id": 61, "lat": -7.540778246341464, "lon": 110.81639430526316, "demand": 9.0, "tw_start": 293.9866369710468, "tw_end": 427.6169265033408, "service": 44.54342984409799, "route_id": 22, "route_label": "R22", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 202.29055705251358, "ret": 500.7577118598223}, {"id": 62, "lat": -7.567116965853659, "lon": 110.8374142631579, "demand": 3.0, "tw_start": 231.62583518930958, "tw_end": 365.25612472160356, "service": 44.54342984409799, "route_id": 11, "route_label": "R11", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 177.32619486936147, "ret": 432.99528675746427}, {"id": 63, "lat": -7.580286325609756, "lon": 110.8374142631579, "demand": 6.0, "tw_start": 173.71937639198217, "tw_end": 307.34966592427617, "service": 44.54342984409799, "route_id": 5, "route_label": "R5", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 211.9789501010801, "ret": 473.1416585716652}, {"id": 64, "lat": -7.571506752439024, "lon": 110.81639430526316, "demand": 17.0, "tw_start": 236.08017817371936, "tw_end": 369.71046770601333, "service": 44.54342984409799, "route_id": 11, "route_label": "R11", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 177.32619486936147, "ret": 432.99528675746427}, {"id": 65, "lat": -7.562727179268292, "lon": 110.80588432631579, "demand": 16.0, "tw_start": 48.99777282850779, "tw_end": 182.62806236080178, "service": 44.54342984409799, "route_id": 23, "route_label": "R23", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 124.69436376230261, "ret": 418.5496566243961}, {"id": 66, "lat": -7.565361051219512, "lon": 110.81219031368421, "demand": 16.0, "tw_start": 592.4276169265033, "tw_end": 726.0579064587973, "service": 44.54342984409799, "route_id": 12, "route_label": "R12", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 439.1134925174048, "ret": 662.3683452389292}, {"id": 67, "lat": -7.560971264634146, "lon": 110.83636326526316, "demand": 9.0, "tw_start": 311.80400890868594, "tw_end": 445.43429844097994, "service": 44.54342984409799, "route_id": 26, "route_label": "R26", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 237.08655873715406, "ret": 524.0706380087146}, {"id": 68, "lat": -7.54516803292683, "lon": 110.81113931578948, "demand": 21.0, "tw_start": 641.4253897550111, "tw_end": 775.0556792873051, "service": 44.54342984409799, "route_id": 7, "route_label": "R7", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 665.7214360539693, "ret": 926.3938608588261}, {"id": 69, "lat": -7.552191691463415, "lon": 110.80168033473684, "demand": 27.0, "tw_start": 182.62806236080178, "tw_end": 316.2583518930958, "service": 44.54342984409799, "route_id": 5, "route_label": "R5", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 211.9789501010801, "ret": 473.1416585716652}, {"id": 70, "lat": -7.537266417073171, "lon": 110.80588432631579, "demand": 23.0, "tw_start": 801.7817371937639, "tw_end": 935.4120267260579, "service": 44.54342984409799, "route_id": 2, "route_label": "R2", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 854.5668141152163, "ret": 1040.3310024793132}, {"id": 71, "lat": -7.549557819512195, "lon": 110.8374142631579, "demand": 14.0, "tw_start": 289.53229398663694, "tw_end": 423.16258351893094, "service": 44.54342984409799, "route_id": 20, "route_label": "R20", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 233.87156320852455, "ret": 486.35357377532245}, {"id": 72, "lat": -7.540778246341464, "lon": 110.83531226736842, "demand": 8.0, "tw_start": 133.63028953229397, "tw_end": 267.26057906458794, "service": 44.54342984409799, "route_id": 24, "route_label": "R24", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 116.47228515884473, "ret": 348.3627700536782}, {"id": 73, "lat": -7.54516803292683, "lon": 110.77120139578948, "demand": 5.0, "tw_start": 342.98440979955456, "tw_end": 476.61469933184856, "service": 44.54342984409799, "route_id": 29, "route_label": "R29", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 307.29012845911154, "ret": 606.7399280285586}, {"id": 74, "lat": -7.580286325609756, "lon": 110.79011935789474, "demand": 8.0, "tw_start": 628.0623608017818, "tw_end": 761.6926503340757, "service": 44.54342984409799, "route_id": 6, "route_label": "R6", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 598.719584642259, "ret": 839.013819046028}, {"id": 75, "lat": -7.5934556853658535, "lon": 110.77435438947369, "demand": 16.0, "tw_start": 329.62138084632517, "tw_end": 463.25167037861917, "service": 44.54342984409799, "route_id": 15, "route_label": "R15", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 282.394626471628, "ret": 559.6212559090416}, {"id": 76, "lat": -7.587309984146342, "lon": 110.83215927368421, "demand": 31.0, "tw_start": 334.07572383073494, "tw_end": 467.70601336302894, "service": 44.54342984409799, "route_id": 25, "route_label": "R25", "vehicle_type": "van", "vehicle_label": "Van", "dep": 166.27757416880434, "ret": 555.1912643142947}, {"id": 77, "lat": -7.5952116, "lon": 110.79327235157895, "demand": 7.0, "tw_start": 668.1514476614699, "tw_end": 801.7817371937639, "service": 44.54342984409799, "route_id": 4, "route_label": "R4", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 642.4324739140143, "ret": 932.9959019353668}, {"id": 78, "lat": -7.548679862195122, "lon": 110.7775073831579, "demand": 27.0, "tw_start": 400.89086859688194, "tw_end": 534.5211581291759, "service": 44.54342984409799, "route_id": 13, "route_label": "R13", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 380.809539540942, "ret": 614.010767014499}, {"id": 79, "lat": -7.538144374390244, "lon": 110.77540538736842, "demand": 30.0, "tw_start": 396.43652561247217, "tw_end": 530.0668151447661, "service": 44.54342984409799, "route_id": 27, "route_label": "R27", "vehicle_type": "van", "vehicle_label": "Van", "dep": 312.67775167896616, "ret": 717.3600371609184}, {"id": 80, "lat": -7.5565814780487806, "lon": 110.81849630105263, "demand": 13.0, "tw_start": 855.2338530066816, "tw_end": 988.8641425389754, "service": 44.54342984409799, "route_id": 2, "route_label": "R2", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 854.5668141152163, "ret": 1040.3310024793132}, {"id": 81, "lat": -7.546923947560976, "lon": 110.8205982968421, "demand": 10.0, "tw_start": 383.0734966592428, "tw_end": 516.7037861915368, "service": 44.54342984409799, "route_id": 9, "route_label": "R9", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 505.75688202899835, "ret": 795.5820909772704}, {"id": 82, "lat": -7.560093307317073, "lon": 110.7974763431579, "demand": 9.0, "tw_start": 187.08240534521158, "tw_end": 320.71269487750556, "service": 44.54342984409799, "route_id": 29, "route_label": "R29", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 307.29012845911154, "ret": 606.7399280285586}, {"id": 83, "lat": -7.5706287951219515, "lon": 110.80798632210526, "demand": 14.0, "tw_start": 155.90200445434297, "tw_end": 289.53229398663694, "service": 44.54342984409799, "route_id": 18, "route_label": "R18", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 187.53927348905512, "ret": 482.7441393780226}, {"id": 84, "lat": -7.572384709756098, "lon": 110.82900628, "demand": 18.0, "tw_start": 427.6169265033408, "tw_end": 561.2472160356348, "service": 44.54342984409799, "route_id": 28, "route_label": "R28", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 410.9040960904606, "ret": 630.2686677303441}, {"id": 85, "lat": -7.577652453658536, "lon": 110.83531226736842, "demand": 2.0, "tw_start": 387.52783964365256, "tw_end": 521.1581291759466, "service": 44.54342984409799, "route_id": 17, "route_label": "R17", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 456.6328832377621, "ret": 743.8242941790953}, {"id": 86, "lat": -7.576774496341463, "lon": 110.79117035578948, "demand": 28.0, "tw_start": 387.52783964365256, "tw_end": 521.1581291759466, "service": 44.54342984409799, "route_id": 27, "route_label": "R27", "vehicle_type": "van", "vehicle_label": "Van", "dep": 312.67775167896616, "ret": 717.3600371609184}, {"id": 87, "lat": -7.576774496341463, "lon": 110.78171137473684, "demand": 13.0, "tw_start": 400.89086859688194, "tw_end": 534.5211581291759, "service": 44.54342984409799, "route_id": 13, "route_label": "R13", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 380.809539540942, "ret": 614.010767014499}, {"id": 88, "lat": -7.546923947560976, "lon": 110.79432334947369, "demand": 19.0, "tw_start": 298.44097995545656, "tw_end": 432.07126948775056, "service": 44.54342984409799, "route_id": 30, "route_label": "R30", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 411.93659406887747, "ret": 664.6097703249422}, {"id": 89, "lat": -7.5934556853658535, "lon": 110.83951625894737, "demand": 25.0, "tw_start": 641.4253897550111, "tw_end": 775.0556792873051, "service": 44.54342984409799, "route_id": 7, "route_label": "R7", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 665.7214360539693, "ret": 926.3938608588261}, {"id": 90, "lat": -7.5565814780487806, "lon": 110.80798632210526, "demand": 6.0, "tw_start": 383.0734966592428, "tw_end": 516.7037861915368, "service": 44.54342984409799, "route_id": 22, "route_label": "R22", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 202.29055705251358, "ret": 500.7577118598223}, {"id": 91, "lat": -7.560971264634146, "lon": 110.8205982968421, "demand": 13.0, "tw_start": 743.8752783964366, "tw_end": 877.5055679287304, "service": 44.54342984409799, "route_id": 4, "route_label": "R4", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 642.4324739140143, "ret": 932.9959019353668}, {"id": 92, "lat": -7.560093307317073, "lon": 110.82480228842105, "demand": 14.0, "tw_start": 62.360801781737194, "tw_end": 195.99109131403117, "service": 44.54342984409799, "route_id": 23, "route_label": "R23", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 124.69436376230261, "ret": 418.5496566243961}, {"id": 93, "lat": -7.552191691463415, "lon": 110.83321027157895, "demand": 3.0, "tw_start": 792.8730512249443, "tw_end": 926.5033407572383, "service": 44.54342984409799, "route_id": 7, "route_label": "R7", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 665.7214360539693, "ret": 926.3938608588261}, {"id": 94, "lat": -7.555703520731708, "lon": 110.82900628, "demand": 23.0, "tw_start": 423.16258351893094, "tw_end": 556.7928730512249, "service": 44.54342984409799, "route_id": 17, "route_label": "R17", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 456.6328832377621, "ret": 743.8242941790953}, {"id": 95, "lat": -7.565361051219512, "lon": 110.82795528210526, "demand": 6.0, "tw_start": 151.4476614699332, "tw_end": 285.07795100222717, "service": 44.54342984409799, "route_id": 24, "route_label": "R24", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 116.47228515884473, "ret": 348.3627700536782}, {"id": 96, "lat": -7.550435776829269, "lon": 110.82690428421053, "demand": 26.0, "tw_start": 587.9732739420936, "tw_end": 721.6035634743876, "service": 44.54342984409799, "route_id": 1, "route_label": "R1", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 561.3791496654032, "ret": 780.2598794059946}, {"id": 97, "lat": -7.5820422402439025, "lon": 110.77330339157895, "demand": 35.0, "tw_start": 534.5211581291759, "tw_end": 668.1514476614699, "service": 44.54342984409799, "route_id": 27, "route_label": "R27", "vehicle_type": "van", "vehicle_label": "Van", "dep": 312.67775167896616, "ret": 717.3600371609184}, {"id": 98, "lat": -7.552191691463415, "lon": 110.79642534526316, "demand": 9.0, "tw_start": 204.89977728285078, "tw_end": 338.5300668151448, "service": 44.54342984409799, "route_id": 20, "route_label": "R20", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 233.87156320852455, "ret": 486.35357377532245}, {"id": 99, "lat": -7.567116965853659, "lon": 110.79642534526316, "demand": 15.0, "tw_start": 342.98440979955456, "tw_end": 476.61469933184856, "service": 44.54342984409799, "route_id": 15, "route_label": "R15", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 282.394626471628, "ret": 559.6212559090416}, {"id": 100, "lat": -7.539022331707318, "lon": 110.80168033473684, "demand": 3.0, "tw_start": 801.7817371937639, "tw_end": 935.4120267260579, "service": 44.54342984409799, "route_id": 2, "route_label": "R2", "vehicle_type": "motorcycle", "vehicle_label": "Motorcycle", "dep": 854.5668141152163, "ret": 1040.3310024793132}], "vsumm": {"motorcycle": {"routes": 28, "customers": 88, "dist": 3530.5089876231045, "wait": 18.931660484077327, "emission": 392.4384336299574, "load": 1410.0, "cap": 60.0}, "van": {"routes": 3, "customers": 12, "dist": 583.1718383999573, "wait": 0.0, "emission": 188.3145804732166, "load": 314.0, "cap": 150.0}}, "heat": [[-7.552191691463415, 110.80168033473684, 4.05795226111466], [-7.580286325609756, 110.8374142631579, 4.05795226111466], [-7.5934556853658535, 110.81534330736842, 4.05795226111466], [-7.577652453658536, 110.83531226736842, 1.689450925183337], [-7.555703520731708, 110.82900628, 1.689450925183337], [-7.54516803292683, 110.82690428421053, 1.689450925183337], [-7.54516803292683, 110.8006293368421, 1.689450925183337]]};
+
+// ── Tile layers ───────────────────────────────────────────────────────────────
+const TILES = {
+  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+  sat:   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+};
+
+const map = L.map('map', {zoomControl:true,preferCanvas:true});
+let tileLayer = L.tileLayer(TILES.dark,{maxZoom:20,attribution:'&copy; CARTO'}).addTo(map);
+
+function setTile(name){
+  map.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(TILES[name],{maxZoom:20,attribution:'&copy; OpenStreetMap'}).addTo(map);
+  document.querySelectorAll('.map-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tile-'+name).classList.add('active');
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const routeLayers   = {};  // route_id → {group,poly,vehicle_type,data}
+const custMarkers   = {};  // customer_id → marker
+let clusterGroup    = null;
+let heatLayer       = null;
+let activeRoute     = null;
+let heatVisible     = false;
+let clusterVisible  = false;
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2200);
+}
+
+// ── Counter animation ─────────────────────────────────────────────────────────
+function animateCounter(el, target, suffix='', decimals=0, duration=800){
+  const start = performance.now();
+  (function frame(t){
+    const progress = Math.min((t-start)/duration, 1);
+    const ease = 1-Math.pow(1-progress,3);
+    el.textContent = (target*ease).toFixed(decimals)+suffix;
+    if(progress<1) requestAnimationFrame(frame);
+    else el.textContent = target.toFixed(decimals)+suffix;
+  })(performance.now());
+}
+
+// ── Init KPI ──────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(()=>{
+    animateCounter(document.getElementById('kpi-k'),    D.K,          '',  0, 600);
+    animateCounter(document.getElementById('kpi-emit'), D.tot_emission,'', 1, 900);
+    animateCounter(document.getElementById('kpi-wait'), D.avg_wait,   '', 1, 900);
+    animateCounter(document.getElementById('kpi-ot'),   D.on_time*100,'%',1, 700);
+  },300);
+  initMap();
+  initCharts();
+});
+
+// ── Map init ──────────────────────────────────────────────────────────────────
+function initMap(){
+  addDepot();
+  D.routes.forEach(r=>addRoute(r));
+  initHeat();
+  initCluster();
+  fitAll();
+}
+
+function addDepot(){
+  const icon = L.divIcon({
+    className:'',
+    html:`<div style="width:34px;height:34px;background:#1e293b;border:2px solid #fff;border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(0,0,0,.5);font-size:15px;">🏬</div>`,
+    iconSize:[34,34],iconAnchor:[17,17]
+  });
+  L.marker([D.depot.lat,D.depot.lon],{icon}).addTo(map)
+   .bindPopup('<b>DEPOT</b><br>Titik awal &amp; akhir semua rute.');
+}
+
+function addRoute(r){
+  const group = L.layerGroup();
+  const col   = r.color;
+
+  // AntPath
+  let ant = null;
+  try{
+    ant = L.polyline.antPath(r.geometry,{
+      color:col, weight:4, delay:600,
+      dashArray:[10,18], pulseColor:'rgba(255,255,255,.7)',
+      paused:false, hardwareAccelerated:true
+    });
+    group.addLayer(ant);
+  }catch(e){
+    L.polyline(r.geometry,{color:col,weight:4,opacity:.85}).addTo(group);
+  }
+
+  // Arrowhead decorator
+  const poly = L.polyline(r.geometry,{color:col,weight:4,opacity:.0}).addTo(group);
+  try{
+    L.polylineDecorator(poly,{patterns:[{
+      offset:'20%',repeat:'25%',
+      symbol:L.Symbol.arrowHead({pixelSize:8,polygon:false,pathOptions:{stroke:true,color:col,weight:2,opacity:.9}})
+    }]}).addTo(group);
+  }catch(e){}
+
+  // Click overlay
+  const clickPoly = L.polyline(r.geometry,{color:'transparent',weight:14,opacity:.01});
+  clickPoly.on('click',()=>{focusRoute(r.route_id);clickPoly.openPopup();});
+  clickPoly.bindPopup(makePopup(r));
+  group.addLayer(clickPoly);
+
+  // Customer markers
+  r.customer_ids.forEach(cid=>{
+    const c = D.customers.find(x=>x.id===cid);
+    if(!c) return;
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="width:26px;height:26px;background:${col};border:2px solid rgba(255,255,255,.8);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.35)">${cid}</div>`,
+      iconSize:[26,26],iconAnchor:[13,13]
+    });
+    const mk = L.marker([c.lat,c.lon],{icon});
+    mk.bindPopup(makeCustomerPopup(c,r));
+    mk.on('click',()=>focusRoute(r.route_id));
+    group.addLayer(mk);
+    custMarkers[cid] = mk;
+  });
+
+  group.addTo(map);
+  routeLayers[r.route_id] = {group,poly:clickPoly,ant:ant,vehicle_type:r.vehicle_type,data:r};
+}
+
+function makePopup(r){
+  return `<div style="font-weight:800;font-size:13px;margin-bottom:6px">${r.label} — ${r.vehicle_label}</div>
+<table style="font-size:11px;border-collapse:collapse;width:240px">
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Berangkat</td><td><b>menit ${Math.round(r.dep)}</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Kembali</td><td><b>menit ${Math.round(r.ret)}</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Jarak</td><td><b>${r.dist.toFixed(1)} km</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Durasi</td><td><b>${r.dur.toFixed(0)} mnt</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Waiting</td><td><b>${r.wait.toFixed(0)} mnt</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Muatan</td><td><b>${r.load.toFixed(0)}/${r.vehicle_cap.toFixed(0)}</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Emisi</td><td><b>${r.emission.toFixed(2)} kgCO₂</b></td></tr>
+</table>`;
+}
+
+function makeCustomerPopup(c,r){
+  return `<div style="font-weight:800;font-size:13px;margin-bottom:6px">C${c.id} → ${r.label}</div>
+<table style="font-size:11px;border-collapse:collapse">
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Demand</td><td><b>${c.demand.toFixed(0)} unit</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">TW</td><td><b>${c.tw_start.toFixed(0)} – ${c.tw_end.toFixed(0)} mnt</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Servis</td><td><b>${c.service.toFixed(0)} mnt</b></td></tr>
+<tr><td style="color:#64748b;padding:2px 4px 2px 0">Kendaraan</td><td><b>${r.vehicle_label}</b></td></tr>
+</table>`;
+}
+
+function initHeat(){
+  if(!D.heat||!D.heat.length) return;
+  heatLayer = L.heatLayer(D.heat,{radius:22,blur:16,minOpacity:.2,gradient:{0.2:'#3b82f6',0.5:'#f59e0b',0.8:'#ef4444',1:'#7f1d1d'}});
+}
+
+function initCluster(){
+  clusterGroup = L.markerClusterGroup({maxClusterRadius:50,showCoverageOnHover:false});
+  D.customers.forEach(c=>{
+    const mk = L.marker([c.lat,c.lon]).bindPopup(`C${c.id} | Demand: ${c.demand} | TW: ${c.tw_start.toFixed(0)}–${c.tw_end.toFixed(0)}`);
+    clusterGroup.addLayer(mk);
+  });
+}
+
+function fitAll(){
+  const pts = D.routes.flatMap(r=>r.geometry);
+  if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.06));
+  else map.setView([D.center.lat,D.center.lon],13);
+}
+
+// ── Focus & highlight ─────────────────────────────────────────────────────────
+function focusRoute(id) {
+  Object.entries(routeLayers).forEach(([rid, obj]) => {
+    if (Number(rid) === Number(id)) {
+      if (!map.hasLayer(obj.group)) map.addLayer(obj.group);
+    } else {
+      if (map.hasLayer(obj.group)) map.removeLayer(obj.group);
+    }
+  });
+
+  document.querySelectorAll('.rcard').forEach(c => c.classList.remove('active'));
+
+  const obj = routeLayers[id];
+  if (!obj) return;
+
+  activeRoute = id;
+  const r = obj.data;
+
+  const card = document.querySelector(`.rcard[data-route-id="${id}"]`);
+  if (card) {
+    card.classList.add('active');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  showDetail(r);
+  toast(`R${id} — ${r.vehicle_label} (${r.n_customers} customer)`);
+}
+
+function focusCustomer(id){
+  const mk = custMarkers[id];
+  if(mk){map.setView(mk.getLatLng(),17);mk.openPopup();}
+  const c = D.customers.find(x=>x.id===id);
+  if(c&&c.route_id) focusRoute(c.route_id);
+}
+
+function showDetail(r){
+  document.getElementById('dpTitle').textContent = `${r.label} — ${r.vehicle_label}`;
+  document.getElementById('dpGrid').innerHTML = `
+    <div class="detail-cell"><span>Berangkat</span><b>menit ${Math.round(r.dep)}</b></div>
+    <div class="detail-cell"><span>Kembali</span><b>menit ${Math.round(r.ret)}</b></div>
+    <div class="detail-cell"><span>Jarak</span><b>${r.dist.toFixed(1)} km</b></div>
+    <div class="detail-cell"><span>Durasi</span><b>${r.dur.toFixed(0)} mnt</b></div>
+    <div class="detail-cell"><span>Nyetir</span><b>${r.drive.toFixed(0)} mnt</b></div>
+    <div class="detail-cell"><span>Servis</span><b>${r.svc.toFixed(0)} mnt</b></div>
+    <div class="detail-cell"><span>Waiting</span><b>${r.wait.toFixed(0)} mnt</b></div>
+    <div class="detail-cell"><span>Emisi</span><b>${r.emission.toFixed(2)} kgCO₂</b></div>
+    <div class="detail-cell"><span>Muatan</span><b>${r.load.toFixed(0)}/${r.vehicle_cap}</b></div>
+    <div class="detail-cell"><span>F_green</span><b>${r.green_cost.toFixed(1)}</b></div>
+  `;
+  document.getElementById('dpSeq').textContent = r.seq;
+  document.getElementById('detailPanel').classList.add('visible');
+}
+
+function closeDetail(){document.getElementById('detailPanel').classList.remove('visible');}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+function filterVehicle(type){
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));
+  if(type==='all'){
+    document.getElementById('btn-all').classList.add('active');
+    Object.values(routeLayers).forEach(obj=>{if(!map.hasLayer(obj.group))map.addLayer(obj.group);});
+    document.querySelectorAll('.rcard').forEach(c=>c.style.display='');
+  }else{
+    document.getElementById('btn-'+type)?.classList.add('active');
+    Object.values(routeLayers).forEach(obj=>{
+      const show = _vkey(obj.vehicle_type)===type;
+      show?map.addLayer(obj.group):map.removeLayer(obj.group);
+    });
+    document.querySelectorAll('.rcard').forEach(c=>{
+      c.style.display = _vkey(c.dataset.vtype)===type?'':'none';
+    });
+  }
+}
+
+function _vkey(n){
+  n=(n||'').toLowerCase();
+  if(n.includes('motor'))return 'motorcycle';
+  if(n.includes('van'))return 'van';
+  if(n.includes('truck'))return 'truck';
+  return n;
+}
+
+// ── Toggles ───────────────────────────────────────────────────────────────────
+function toggleHeat(){
+  if(!heatLayer)return;
+  heatVisible?map.removeLayer(heatLayer):heatLayer.addTo(map);
+  heatVisible=!heatVisible;
+  document.getElementById('btn-heat').classList.toggle('active',heatVisible);
+  toast(heatVisible?'Heatmap waiting aktif':'Heatmap nonaktif');
+}
+
+function toggleCluster(){
+  if(!clusterGroup)return;
+  clusterVisible?map.removeLayer(clusterGroup):clusterGroup.addTo(map);
+  clusterVisible=!clusterVisible;
+  document.getElementById('btn-cluster').classList.toggle('active',clusterVisible);
+  toast(clusterVisible?'Cluster marker aktif':'Cluster nonaktif');
+}
+
+let simulationRunning = false;
+let simMarkers = [];
+let simIntervals = [];
+
+// ── ANTPATH TOGGLE ────────────────────────────────────────────────────────────
+let antVisible = true;
+function toggleAntPath() {
+  antVisible = !antVisible;
+  Object.values(routeLayers).forEach(obj => {
+    if (!obj.ant) return;
+    antVisible ? obj.group.addLayer(obj.ant) : obj.group.removeLayer(obj.ant);
+  });
+  document.querySelector('[onclick="toggleAntPath()"]')
+    .classList.toggle('active', antVisible);
+  toast(antVisible ? 'AntPath aktif' : 'AntPath nonaktif');
+}
+
+// ── VEHICLE ICON ──────────────────────────────────────────────────────────────
+function createVehicleIcon(color, faIcon) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};
+      border:2px solid #fff;display:flex;align-items:center;justify-content:center;
+      color:#fff;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,.5)">
+      <i class="fa-solid ${faIcon}"></i></div>`,
+    iconSize: [28, 28], iconAnchor: [14, 14]
+  });
+}
+
+// ── INTERPOLATE POSITION along geometry ───────────────────────────────────────
+function getPosPct(geom, pct) {
+  if (!geom || geom.length < 2) return geom ? geom[0] : [0, 0];
+  pct = Math.max(0, Math.min(1, pct));
+  const total = geom.length - 1;
+  const rawIdx = pct * total;
+  const idx = Math.min(Math.floor(rawIdx), total - 1);
+  const frac = rawIdx - idx;
+  const a = geom[idx], b = geom[Math.min(idx + 1, total)];
+  return [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac];
+}
+
+// ── SIMULATION STATE ──────────────────────────────────────────────────────────
+let simRunning   = false;
+let simRAF       = null;
+let simVTime     = 0;      // jam virtual (menit)
+let simRealStart = null;   // performance.now() saat mulai
+let simVStart    = 0;      // simVTime saat mulai
+const simVehicles = {};  // route_id → L.marker
+
+// Percepatan: 1 detik real = N menit virtual
+function simSpeed() {
+  return parseFloat(document.getElementById('sim-speed')?.value || '4');
+}
+
+function simMaxTime() {
+  return Math.max(...D.routes.map(r => r.ret), 1);
+}
+
+// ── GANTT: cursor waktu yang sinkron dengan bar aktual ────────────────────────
+let tlCursorEl = null;
+function updateTlCursor(vTime) {
+  const wrap = document.querySelector('.timeline-wrap');
+  if (!wrap) return;
+
+  // Ukur posisi bar dari DOM — lebih akurat dari CSS calc
+  const firstRow = wrap.querySelector('.tl-row');
+  if (!firstRow) return;
+  const barWrap = firstRow.querySelector('.tl-bar-wrap');
+  if (!barWrap) return;
+
+  const wrapRect  = wrap.getBoundingClientRect();
+  const barRect   = barWrap.getBoundingClientRect();
+  const barLeft   = barRect.left  - wrapRect.left;   // px dari kiri wrap
+  const barWidth  = barRect.width;                    // lebar bar aktual
+
+  if (!tlCursorEl) {
+    tlCursorEl = document.createElement('div');
+    tlCursorEl.id = 'tl-cursor';
+    tlCursorEl.style.cssText = [
+      'position:absolute', 'top:28px', 'bottom:32px', 'width:2px',
+      'background:rgba(251,191,36,.9)', 'pointer-events:none', 'z-index:10',
+      'box-shadow:0 0 8px rgba(251,191,36,.7)', 'border-radius:1px'
+    ].join(';');
+    wrap.style.position = 'relative';
+    wrap.appendChild(tlCursorEl);
+  }
+
+  const maxT = simMaxTime();
+  const pct  = Math.min(Math.max(vTime / maxT, 0), 1);
+  // Posisi cursor = awal bar + fraksi × lebar bar
+  tlCursorEl.style.left = (barLeft + pct * barWidth) + 'px';
+
+  // Label
+  let lbl = document.getElementById('sim-time-lbl');
+  if (!lbl) {
+    lbl = document.createElement('div');
+    lbl.id = 'sim-time-lbl';
+    lbl.style.cssText = 'font-size:10px;color:#fbbf24;margin-top:6px;font-weight:700;padding:0 2px';
+    wrap.appendChild(lbl);
+  }
+  const activeNow = D.routes.filter(r => vTime >= r.dep && vTime <= r.ret).length;
+  lbl.textContent = `⏱ t=${vTime.toFixed(0)} mnt — ${activeNow} kendaraan aktif`;
+}
+
+// ── MAIN SIMULATION LOOP ──────────────────────────────────────────────────────
+function simTick(now) {
+  if (!simRunning) return;
+
+  // Hitung waktu virtual
+  const realElapsed = (now - simRealStart) / 1000; // detik
+  simVTime = simVStart + realElapsed * simSpeed();
+
+  const maxT = simMaxTime();
+  if (simVTime >= maxT + 5) {
+    // Selesai — restart dari awal
+    simVTime = 0;
+    simRealStart = now;
+    simVStart = 0;
+  }
+
+  D.routes.forEach(r => {
+    const mk = simVehicles[r.route_id];
+    if (!mk) return;
+
+    const active = simVTime >= r.dep && simVTime <= r.ret;
+    if (!active) {
+      mk.setOpacity(0);
+      return;
+    }
+
+    mk.setOpacity(1);
+    const progress = (simVTime - r.dep) / Math.max(r.ret - r.dep, 1);
+    const pos = getPosPct(r.geometry, progress);
+    mk.setLatLng(pos);
+  });
+
+  updateTlCursor(simVTime);
+
+  simRAF = requestAnimationFrame(simTick);
+}
+
+function startSim() {
+  if (simRunning) return;
+  simRunning = true;
+  simRealStart = performance.now();
+  simVStart = simVTime;
+
+  // Buat markers jika belum ada
+  D.routes.forEach(r => {
+    if (simVehicles[r.route_id]) return;
+    const faIcon = r.vehicle_icon || 'fa-truck';
+    const mk = L.marker([D.depot.lat, D.depot.lon], {
+      icon: createVehicleIcon(r.color, faIcon),
+      zIndexOffset: 1000
+    }).addTo(map);
+    mk.setOpacity(0);
+    simVehicles[r.route_id] = mk;
+  });
+
+  document.getElementById('btn-sim').classList.add('active');
+  document.getElementById('btn-sim').innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
+  simRAF = requestAnimationFrame(simTick);
+  toast('Simulasi dimulai');
+}
+
+function pauseSim() {
+  simRunning = false;
+  if (simRAF) cancelAnimationFrame(simRAF);
+  simVStart = simVTime; // simpan posisi
+  document.getElementById('btn-sim').classList.remove('active');
+  document.getElementById('btn-sim').innerHTML = '<i class="fa-solid fa-play"></i> Lanjut';
+  toast('Simulasi dijeda');
+}
+
+function stopSim() {
+  simRunning = false;
+  if (simRAF) cancelAnimationFrame(simRAF);
+  simVTime = 0;
+  simRealStart = null;
+  simVStart = 0;
+
+  Object.values(simVehicles).forEach(mk => {
+    try { map.removeLayer(mk); } catch(e) {}
+  });
+  Object.keys(simVehicles).forEach(k => delete simVehicles[k]);
+
+  if (tlCursorEl) { tlCursorEl.remove(); tlCursorEl = null; }
+  const lbl = document.getElementById('sim-time-lbl');
+  if (lbl) lbl.remove();
+
+  document.getElementById('btn-sim').classList.remove('active');
+  document.getElementById('btn-sim').innerHTML = '<i class="fa-solid fa-play"></i> Simulasi';
+  toast('Simulasi dihentikan');
+}
+
+function toggleSimulation() {
+  if (!simRunning && simVTime === 0) { startSim(); return; }
+  if (simRunning) { pauseSim(); return; }
+  startSim(); // resume
+}
+
+// ── PER-RUTE SIMULATION ───────────────────────────────────────────────────────
+let singleSimRAF = null;
+let singleSimRunning = false;
+
+function startRouteSim(routeId) {
+  if (singleSimRunning) {
+    singleSimRunning = false;
+    if (singleSimRAF) cancelAnimationFrame(singleSimRAF);
+    Object.values(simVehicles).forEach(mk => { try { map.removeLayer(mk); } catch(e) {} });
+  }
+
+  const r = D.routes.find(x => x.route_id === Number(routeId));
+  if (!r) return;
+
+  // Solo mode: sembunyikan rute lain
+  Object.entries(routeLayers).forEach(([rid, obj]) => {
+    Number(rid) === r.route_id ? map.addLayer(obj.group) : map.removeLayer(obj.group);
+  });
+  if (r.poly) map.fitBounds(L.latLngBounds(r.geometry).pad(0.1));
+
+  const mk = L.marker([D.depot.lat, D.depot.lon], {
+    icon: createVehicleIcon(r.color, r.vehicle_icon || 'fa-truck'),
+    zIndexOffset: 1000
+  }).addTo(map);
+
+  const dur = Math.max(r.ret - r.dep, 1);
+  const t0  = performance.now();
+  singleSimRunning = true;
+
+  function tick(now) {
+    if (!singleSimRunning) return;
+    const elapsed  = (now - t0) / 1000 * simSpeed();
+    const progress = Math.min(elapsed / dur, 1);
+    mk.setLatLng(getPosPct(r.geometry, progress));
+
+    const el = document.getElementById('single-sim-status');
+    if (el) el.textContent = `${r.label}: ${(progress*100).toFixed(0)}% (t=${(r.dep + elapsed).toFixed(0)} mnt)`;
+
+    if (progress < 1) {
+      singleSimRAF = requestAnimationFrame(tick);
+    } else {
+      singleSimRunning = false;
+      if (el) el.textContent = `${r.label}: Selesai ✓`;
+      setTimeout(() => {
+        try { map.removeLayer(mk); } catch(e) {}
+        // Restore semua rute
+        Object.values(routeLayers).forEach(obj => map.addLayer(obj.group));
+      }, 1500);
+    }
+  }
+  singleSimRAF = requestAnimationFrame(tick);
+  toast(`Animasi ${r.label} dimulai`);
+}
+
+function resetView() { fitAll(); toast('View direset'); }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const names=['routes','customers','vehicles','analytics'];
+    t.classList.toggle('active',names[i]===name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+// ── Customer search ───────────────────────────────────────────────────────────
+function searchCustomers(){
+  const q=document.getElementById('csearch').value.toLowerCase();
+  document.querySelectorAll('#ctbody tr').forEach(row=>{
+    row.style.display=row.textContent.toLowerCase().includes(q)?'':'none';
+  });
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportCSV(){
+  const rows=[['Route','Vehicle','Customers','Load','Capacity','Dist_km','Departure','Return','Drive_min','Service_min','Wait_min','Emission_kgCO2','Green_Cost']];
+  D.routes.forEach(r=>rows.push([r.label,r.vehicle_label,r.n_customers,r.load.toFixed(0),r.vehicle_cap,r.dist.toFixed(2),r.dep.toFixed(0),r.ret.toFixed(0),r.drive.toFixed(0),r.svc.toFixed(0),r.wait.toFixed(0),r.emission.toFixed(3),r.green_cost.toFixed(2)]));
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=`${D.instance}_routes.csv`;
+  a.click();
+  toast('CSV berhasil diunduh');
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+function initCharts(){
+  const labels = D.routes.map(r=>r.label);
+  const colors = D.routes.map(r=>r.color);
+  const chartOpts = {
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)}}},
+    scales:{
+      x:{ticks:{color:'#64748b',font:{size:9}},grid:{color:'rgba(255,255,255,.05)'}},
+      y:{ticks:{color:'#64748b',font:{size:9}},grid:{color:'rgba(255,255,255,.05)'}}
+    }
+  };
+
+  new Chart(document.getElementById('chartEmisi'),{
+    type:'bar',
+    data:{labels,datasets:[{data:D.routes.map(r=>r.emission),backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{...chartOpts,plugins:{...chartOpts.plugins,tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(2)+' kgCO₂'}}}}
+  });
+
+  // Donut armada
+  const vmap={};
+  D.routes.forEach(r=>{vmap[r.vehicle_type]=(vmap[r.vehicle_type]||0)+1;});
+  const vkeys=Object.keys(vmap);
+  const vcols={'motorcycle':'#3A86FF','van':'#FB5607','truck':'#8338EC'};
+  new Chart(document.getElementById('chartArmada'),{
+    type:'doughnut',
+    data:{
+      labels:vkeys.map(k=>k.charAt(0).toUpperCase()+k.slice(1)),
+      datasets:[{data:vkeys.map(k=>vmap[k]),backgroundColor:vkeys.map(k=>vcols[_vkey(k)]||'#888'),borderWidth:0,hoverOffset:6}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'65%',
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},padding:12}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.parsed+' rute'}}}
+    }
+  });
+
+  new Chart(document.getElementById('chartWait'),{
+    type:'bar',
+    data:{labels,datasets:[{data:D.routes.map(r=>r.wait),backgroundColor:D.routes.map(r=>r.wait>30?'#ef4444':r.wait>10?'#f59e0b':'#22c55e'),borderRadius:6,borderSkipped:false}]},
+    options:{...chartOpts,plugins:{...chartOpts.plugins,tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)+' menit'}}}}
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "fleet_types": [
+    {
+      "name": "motorcycle", "capacity_units": 60.0,
+      "max_route_duration": 540.0, "max_stops": 25.0, "fleet_size": 20,
+      "fixed_cost": 60.0, "ef_km": 0.10, "ef_idle": 0.01, "speed_factor": 1.1
+    },
+    {
+      "name": "van", "capacity_units": 150.0,
+      "max_route_duration": 720.0, "max_stops": 35.0, "fleet_size": 12,
+      "fixed_cost": 100.0, "ef_km": 0.30, "ef_idle": 0.025, "speed_factor": 1.0
+    },
+    {
+      "name": "truck", "capacity_units": 250.0,
+      "max_route_duration": 900.0, "max_stops": 50.0, "fleet_size": 10,
+      "fixed_cost": 110.0, "ef_km": 0.60, "ef_idle": 0.04, "speed_factor": 0.9
+    }
+  ],
+  "weights": {
+    "w_distance": 1.0,
+    "w_move_emission": 2.0,
+    "w_idle_emission": 80.0
+  },
+  "penalties": {
+    "lambda_load": 2000.0,
+    "lambda_tw": 200.0,
+    "lambda_duration": 80.0,
+    "lambda_waiting": 0.5,
+    "target_feasible_ratio": 0.35,
+    "adaptation_step": 0.2,
+    "adaptation_interval": 5
+  }
+}
